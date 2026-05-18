@@ -49,6 +49,12 @@ This project is built across multiple Claude Code sessions:
 
 Each session should stop at its phase boundary. Do not implement work from a later phase.
 
+## Session 3 — Frontend Visual Verification
+When building or polishing the React UI, follow `.claude/rules/screenshot-loop.md`.
+Reference design: `mock_design.html` in the repo root.
+Minimum 2 screenshot comparison rounds before calling any UI task complete.
+Puppeteer (via `npx`, not installed permanently) is approved for screenshot capture during Session 3 only.
+
 ## Git Hygiene
 - Commit per logical unit of work, not per file
 - Commit messages: imperative mood, scoped prefix (e.g. "agents: implement Verifier prompt v1")
