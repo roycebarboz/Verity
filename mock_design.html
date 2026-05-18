@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Verity Triage Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-container": "#0b1c30",
+                    "inverse-surface": "#2d3133",
+                    "secondary": "#0058be",
+                    "on-primary-fixed-variant": "#3f465c",
+                    "on-background": "#191c1e",
+                    "on-secondary-fixed": "#001a42",
+                    "on-tertiary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "surface-container-high": "#e6e8ea",
+                    "on-surface-variant": "#45464d",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-tertiary-fixed": "#0b1c30",
+                    "secondary-container": "#2170e4",
+                    "on-surface": "#191c1e",
+                    "tertiary-fixed-dim": "#b7c8e1",
+                    "primary": "#000000",
+                    "primary-container": "#131b2e",
+                    "surface-container": "#eceef0",
+                    "tertiary": "#000000",
+                    "on-error": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-container-low": "#f2f4f6",
+                    "on-primary-container": "#7c839b",
+                    "inverse-primary": "#bec6e0",
+                    "on-tertiary-fixed-variant": "#38485d",
+                    "surface-dim": "#d8dadc",
+                    "outline": "#76777d",
+                    "surface-bright": "#f7f9fb",
+                    "surface-variant": "#e0e3e5",
+                    "on-primary-fixed": "#131b2e",
+                    "secondary-fixed": "#d8e2ff",
+                    "tertiary-fixed": "#d3e4fe",
+                    "on-secondary": "#ffffff",
+                    "surface": "#f7f9fb",
+                    "on-tertiary-container": "#75859d",
+                    "on-secondary-container": "#fefcff",
+                    "primary-fixed-dim": "#bec6e0",
+                    "on-error-container": "#93000a",
+                    "background": "#f7f9fb",
+                    "surface-container-highest": "#e0e3e5",
+                    "outline-variant": "#c6c6cd",
+                    "error": "#ba1a1a",
+                    "secondary-fixed-dim": "#adc6ff",
+                    "on-secondary-fixed-variant": "#004395",
+                    "primary-fixed": "#dae2fd",
+                    "on-primary": "#ffffff",
+                    "surface-tint": "#565e74"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "stack-md": "16px",
+                    "container-max": "1440px",
+                    "stack-sm": "8px",
+                    "margin-page": "32px",
+                    "panel-gap": "16px",
+                    "gutter": "24px",
+                    "stack-lg": "24px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Inter"],
+                    "label-md": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "title-lg": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-sm": ["Inter"],
+                    "code-sm": ["JetBrains Mono"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "title-lg": ["18px", {"lineHeight": "26px", "fontWeight": "600"}],
+                    "display-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "code-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body {
+            background-color: #F8FAFC;
+        }
+        .panel-border {
+            border: 1px solid #E2E8F0;
+        }
+</style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden text-on-surface font-body-md bg-surface">
+
+<!-- Header -->
+<nav class="flex justify-between items-center w-full px-margin-page h-16 bg-surface-container-highest border-b border-outline-variant">
+  <div class="flex flex-col">
+    <span class="font-headline-md text-headline-md font-bold text-primary leading-tight">Verity Triage</span>
+    <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-[0.2em] -mt-1">Precision System</span>
+  </div>
+  <a class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md" href="#">
+    <span class="material-symbols-outlined text-[18px]">code</span>
+    View Repo
+  </a>
+</nav>
+
+<!-- Main Content -->
+<main class="flex flex-1 overflow-hidden">
+
+  <!-- Left Panel: Ticket Input -->
+  <aside class="w-[400px] flex flex-col p-stack-lg bg-surface-container-lowest border-r border-outline-variant">
+    <div class="flex items-center gap-2 mb-stack-lg">
+      <span class="material-symbols-outlined text-primary">edit_note</span>
+      <h2 class="font-title-lg text-title-lg">Ticket Input</h2>
+    </div>
+    <div class="space-y-stack-md overflow-y-auto">
+      <div class="flex flex-col gap-1">
+        <label class="font-label-md text-label-md text-on-surface-variant uppercase">Customer Support Ticket</label>
+        <textarea class="w-full h-48 p-4 rounded-lg border border-outline-variant focus:ring-2 focus:ring-secondary focus:outline-none font-body-md bg-surface-container-low resize-none" placeholder="Paste ticket content here...">My recent order #88122 was delivered to the wrong address. I requested a refund but haven't heard back in 3 days. My account email is user@example.com. Please resolve this immediately.</textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-label-md text-label-md text-on-surface-variant uppercase">Customer ID</label>
+          <input class="p-2.5 rounded-lg border border-outline-variant focus:ring-2 focus:ring-secondary focus:outline-none font-body-md bg-surface-container-low" type="text" value="CUST-9928"/>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-label-md text-label-md text-on-surface-variant uppercase">Channel</label>
+          <select class="p-2.5 rounded-lg border border-outline-variant focus:ring-2 focus:ring-secondary focus:outline-none font-body-md bg-surface-container-low">
+            <option>email</option>
+            <option selected="">web</option>
+            <option>chat</option>
+          </select>
+        </div>
+      </div>
+      <button class="w-full py-4 bg-primary text-on-tertiary font-bold rounded-lg hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined">bolt</span>
+        Triage
+      </button>
+      <div class="pt-stack-lg">
+        <label class="font-label-md text-label-md text-on-surface-variant uppercase mb-2 block">Preset Examples</label>
+        <div class="grid grid-cols-1 gap-2">
+          <button class="flex items-center gap-3 px-4 py-3 rounded-lg border border-outline-variant hover:bg-surface-container-low text-left transition-colors font-body-md">
+            <span class="material-symbols-outlined text-secondary">payments</span>
+            Billing Question
+          </button>
+          <button class="flex items-center gap-3 px-4 py-3 rounded-lg border border-outline-variant hover:bg-surface-container-low text-left transition-colors font-body-md">
+            <span class="material-symbols-outlined text-secondary">build</span>
+            Technical Issue
+          </button>
+          <button class="flex items-center gap-3 px-4 py-3 rounded-lg border border-outline-variant hover:bg-surface-container-low text-left transition-colors font-body-md">
+            <span class="material-symbols-outlined text-error">security</span>
+            Prompt Injection Test
+          </button>
+          <button class="flex items-center gap-3 px-4 py-3 rounded-lg border border-outline-variant hover:bg-surface-container-low text-left transition-colors font-body-md">
+            <span class="material-symbols-outlined text-secondary">privacy_tip</span>
+            PII Test
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Center Panel: Pipeline Timeline -->
+  <section class="flex-1 overflow-y-auto p-stack-lg bg-surface-container-low flex flex-col items-center">
+    <div class="w-full max-w-2xl">
+      <div class="flex items-center justify-between mb-8">
+        <h2 class="font-title-lg text-title-lg">Pipeline Timeline</h2>
+      </div>
+      <div class="relative space-y-8 pb-12">
+        <div class="absolute left-6 top-4 bottom-4 w-0.5 bg-outline-variant z-0"></div>
+
+        <!-- Agent Card: Bouncer -->
+        <div class="relative z-10 flex gap-6">
+          <div class="w-12 h-12 rounded-full bg-surface-container-lowest border-2 border-green-500 flex items-center justify-center shadow-sm">
+            <span class="material-symbols-outlined text-green-500">security</span>
+          </div>
+          <div class="flex-1 bg-surface-container-lowest panel-border rounded-xl p-4 hover:border-secondary transition-all">
+            <div class="flex justify-between items-start mb-2">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="font-title-lg text-title-lg">Bouncer</h3>
+                  <span class="text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded font-bold uppercase text-on-surface-variant">Attempt #1</span>
+                </div>
+                <p class="font-label-md text-label-md text-on-surface-variant">Security &amp; Compliance Scan</p>
+              </div>
+              <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest">Clear</span>
+            </div>
+            <div class="grid grid-cols-3 gap-4 border-t border-outline-variant pt-3 mt-3">
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Model</span><span class="font-code-sm text-code-sm">gpt-4.1-nano</span></div>
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Latency</span><span class="font-code-sm text-code-sm">2,954ms</span></div>
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Tokens</span><span class="font-code-sm text-code-sm">358</span></div>
+            </div>
+            <div class="mt-3 bg-surface-container-low rounded-lg p-2">
+              <span class="text-[9px] uppercase text-outline font-bold mb-1 block">Structured Output</span>
+              <pre class="font-code-sm text-[11px] text-on-surface-variant">{"category": "billing", "severity": "medium", "injection_detected": false}</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent Card: Librarian -->
+        <div class="relative z-10 flex gap-6">
+          <div class="w-12 h-12 rounded-full bg-surface-container-lowest border-2 border-green-500 flex items-center justify-center shadow-sm">
+            <span class="material-symbols-outlined text-green-500">menu_book</span>
+          </div>
+          <div class="flex-1 bg-surface-container-lowest panel-border rounded-xl p-4 hover:border-secondary transition-all">
+            <div class="flex justify-between items-start mb-2">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="font-title-lg text-title-lg">Librarian</h3>
+                  <span class="text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded font-bold uppercase text-on-surface-variant">Attempt #1</span>
+                </div>
+                <p class="font-label-md text-label-md text-on-surface-variant">Knowledge Retrieval (RAG)</p>
+              </div>
+              <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest">5 Chunks</span>
+            </div>
+            <div class="grid grid-cols-3 gap-4 border-t border-outline-variant pt-3 mt-3">
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Model</span><span class="font-code-sm text-code-sm">gpt-4.1-nano</span></div>
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Latency</span><span class="font-code-sm text-code-sm">3,108ms</span></div>
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Tokens</span><span class="font-code-sm text-code-sm">198</span></div>
+            </div>
+            <div class="mt-3 bg-surface-container-low rounded-lg p-2">
+              <span class="text-[9px] uppercase text-outline font-bold mb-1 block">Structured Output</span>
+              <div class="flex flex-col gap-1">
+                <div class="flex justify-between font-code-sm text-[11px]"><span class="text-on-surface-variant">queries:</span><span class="font-bold">3 generated</span></div>
+                <div class="flex justify-between font-code-sm text-[11px]"><span class="text-on-surface-variant">chunks_retrieved:</span><span class="font-bold">5</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent Card: Drafter — attempt 1 (failed, amber — retry state example) -->
+        <div class="relative z-10 flex gap-6">
+          <div class="w-12 h-12 rounded-full bg-surface-container-lowest border-2 border-amber-400 flex items-center justify-center shadow-sm">
+            <span class="material-symbols-outlined text-amber-400">history_edu</span>
+          </div>
+          <div class="flex-1 bg-surface-container-lowest panel-border rounded-xl overflow-hidden hover:border-secondary transition-all">
+            <!-- Attempt 1 — rejected by Verifier (amber) -->
+            <div class="p-4 border-b border-amber-200 bg-amber-50">
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h3 class="font-title-lg text-title-lg">Drafter</h3>
+                    <span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase">Attempt #1</span>
+                  </div>
+                  <p class="font-label-md text-label-md text-on-surface-variant">Response Generation</p>
+                </div>
+                <span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest">Retry</span>
+              </div>
+              <div class="grid grid-cols-3 gap-4 border-t border-amber-200 pt-3 mt-3">
+                <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Model</span><span class="font-code-sm text-code-sm">gpt-4.1-mini</span></div>
+                <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Latency</span><span class="font-code-sm text-code-sm">8,210ms</span></div>
+                <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Tokens</span><span class="font-code-sm text-code-sm">1,621</span></div>
+              </div>
+              <div class="mt-3 bg-amber-100 rounded-lg p-2">
+                <span class="text-[9px] uppercase text-amber-700 font-bold mb-1 block">Verifier Rejection Reason</span>
+                <p class="font-code-sm text-[11px] text-amber-800">citation_coverage below threshold (0.58 &lt; 0.70)</p>
+              </div>
+            </div>
+            <!-- Attempt 2 — passed (green) -->
+            <div class="p-4">
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded font-bold uppercase text-on-surface-variant">Attempt #2</span>
+                  </div>
+                  <p class="font-label-md text-label-md text-on-surface-variant">Response Generation</p>
+                </div>
+                <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest">Drafted</span>
+              </div>
+              <div class="grid grid-cols-3 gap-4 border-t border-outline-variant pt-3 mt-3">
+                <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Model</span><span class="font-code-sm text-code-sm">gpt-4.1-mini</span></div>
+                <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Latency</span><span class="font-code-sm text-code-sm">10,015ms</span></div>
+                <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Tokens</span><span class="font-code-sm text-code-sm">1,859</span></div>
+              </div>
+              <div class="mt-3 bg-surface-container-low rounded-lg p-2">
+                <span class="text-[9px] uppercase text-outline font-bold mb-1 block">Structured Output</span>
+                <div class="flex flex-col gap-1">
+                  <div class="flex justify-between font-code-sm text-[11px]"><span class="text-on-surface-variant">draft_attempts:</span><span class="font-bold">2</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent Card: Verifier -->
+        <div class="relative z-10 flex gap-6">
+          <div class="w-12 h-12 rounded-full bg-surface-container-lowest border-2 border-green-500 flex items-center justify-center shadow-sm">
+            <span class="material-symbols-outlined text-green-500">fact_check</span>
+          </div>
+          <div class="flex-1 bg-surface-container-lowest panel-border rounded-xl p-4 hover:border-secondary transition-all">
+            <div class="flex justify-between items-start mb-2">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="font-title-lg text-title-lg">Verifier</h3>
+                  <span class="text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded font-bold uppercase text-on-surface-variant">Attempt #2</span>
+                </div>
+                <p class="font-label-md text-label-md text-on-surface-variant">Citation &amp; Fact Check</p>
+              </div>
+              <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest">Verified</span>
+            </div>
+            <div class="grid grid-cols-3 gap-4 border-t border-outline-variant pt-3 mt-3">
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Model</span><span class="font-code-sm text-code-sm">gpt-5-mini</span></div>
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Latency</span><span class="font-code-sm text-code-sm">14,691ms</span></div>
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Tokens</span><span class="font-code-sm text-code-sm">3,388</span></div>
+            </div>
+            <div class="mt-3 bg-surface-container-low rounded-lg p-2">
+              <span class="text-[9px] uppercase text-outline font-bold mb-1 block">Structured Output</span>
+              <div class="flex flex-col gap-1">
+                <div class="flex justify-between font-code-sm text-[11px]"><span class="text-on-surface-variant">passed:</span><span class="font-bold">true</span></div>
+                <div class="flex justify-between font-code-sm text-[11px]"><span class="text-on-surface-variant">pii_detected:</span><span class="font-bold">false</span></div>
+                <div class="flex justify-between font-code-sm text-[11px]"><span class="text-on-surface-variant">citation_coverage:</span><span class="font-bold">0.714</span></div>
+                <div class="flex justify-between font-code-sm text-[11px]"><span class="text-on-surface-variant">failure_reasons:</span><span class="font-bold">[]</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent Card: Dispatcher -->
+        <div class="relative z-10 flex gap-6">
+          <div class="w-12 h-12 rounded-full bg-surface-container-lowest border-2 border-green-500 flex items-center justify-center shadow-sm">
+            <span class="material-symbols-outlined text-green-500">outgoing_mail</span>
+          </div>
+          <div class="flex-1 bg-surface-container-lowest panel-border rounded-xl p-4 hover:border-secondary transition-all">
+            <div class="flex justify-between items-start mb-2">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="font-title-lg text-title-lg">Dispatcher</h3>
+                  <span class="text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded font-bold uppercase text-on-surface-variant">Attempt #1</span>
+                </div>
+                <p class="font-label-md text-label-md text-on-surface-variant">Action Routing</p>
+              </div>
+              <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest">Routed</span>
+            </div>
+            <div class="grid grid-cols-3 gap-4 border-t border-outline-variant pt-3 mt-3">
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Model</span><span class="font-code-sm text-code-sm">gpt-4.1-nano</span></div>
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Latency</span><span class="font-code-sm text-code-sm">1,718ms</span></div>
+              <div class="flex flex-col"><span class="text-[10px] uppercase text-outline font-bold">Tokens</span><span class="font-code-sm text-code-sm">700</span></div>
+            </div>
+            <div class="mt-3 bg-surface-container-low rounded-lg p-2">
+              <span class="text-[9px] uppercase text-outline font-bold mb-1 block">Structured Output</span>
+              <div class="flex flex-col gap-1">
+                <div class="flex justify-between font-code-sm text-[11px]"><span class="text-on-surface-variant">action:</span><span class="font-bold">"send"</span></div>
+                <div class="flex justify-between font-code-sm text-[11px]"><span class="text-on-surface-variant">reasoning:</span><span class="font-bold text-right ml-4 truncate">Verifier passed, low severity</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Right Panel: Final Outcome -->
+  <aside class="w-[450px] flex flex-col p-stack-lg bg-surface-container-lowest border-l border-outline-variant">
+    <div class="flex items-center gap-2 mb-stack-lg">
+      <span class="material-symbols-outlined text-primary">analytics</span>
+      <h2 class="font-title-lg text-title-lg">Final Outcome</h2>
+    </div>
+    <div class="space-y-stack-lg overflow-y-auto">
+
+      <!-- Decision -->
+      <div class="p-6 rounded-xl border-l-8 border-green-500 bg-surface-container-low panel-border">
+        <label class="font-label-md text-label-md text-on-surface-variant uppercase block mb-2">Decision</label>
+        <span class="px-6 py-2 bg-green-500 text-white font-black text-headline-sm rounded-lg inline-block">Action: SEND</span>
+      </div>
+
+      <!-- Final Response -->
+      <div class="flex flex-col gap-2">
+        <label class="font-label-md text-label-md text-on-surface-variant uppercase">Final Response</label>
+        <div class="p-5 rounded-xl bg-surface-container-lowest panel-border font-body-md text-on-surface leading-relaxed shadow-sm">
+          Thank you for reaching out regarding the apparent double charge on your subscription. To address billing disputes such as this, please follow the dispute process outlined in our Invoice Dispute Process documentation. Typically, credit for disputed amounts appears on your next invoice as a Billing Credit. You can initiate a refund request by navigating to Settings &gt; Billing &gt; Invoices in the Web Console and clicking "Request Refund" on the relevant invoice.
+        </div>
+      </div>
+
+      <!-- Citations -->
+      <div class="flex flex-col gap-3">
+        <label class="font-label-md text-label-md text-on-surface-variant uppercase">Citations</label>
+        <div class="flex flex-wrap gap-2">
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded-full text-on-surface-variant font-body-sm hover:bg-secondary-container hover:text-on-secondary-container transition-colors cursor-help">
+            <span class="material-symbols-outlined text-[16px]">description</span>
+            pricing_invoice_dispute.md
+          </div>
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded-full text-on-surface-variant font-body-sm hover:bg-secondary-container hover:text-on-secondary-container transition-colors cursor-help">
+            <span class="material-symbols-outlined text-[16px]">description</span>
+            policy_refund.md
+          </div>
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded-full text-on-surface-variant font-body-sm hover:bg-secondary-container hover:text-on-secondary-container transition-colors cursor-help">
+            <span class="material-symbols-outlined text-[16px]">description</span>
+            runbook_co701.md
+          </div>
+        </div>
+      </div>
+
+      <!-- Verifier Reasoning -->
+      <div class="flex flex-col gap-2">
+        <label class="font-label-md text-label-md text-on-surface-variant uppercase">Verifier Reasoning</label>
+        <div class="p-4 rounded-xl bg-surface-container-low panel-border font-body-sm text-on-surface-variant leading-relaxed">
+          All claims in the draft are supported by retrieved chunks from pricing_invoice_dispute.md and policy_refund.md. No PII detected in the output. Tone is professional and policy-compliant. Citation coverage 0.714 meets the 0.70 threshold.
+        </div>
+      </div>
+
+    </div>
+  </aside>
+</main>
+
+<!-- Footer: Metrics Bar -->
+<footer class="flex justify-between items-center px-margin-page h-12 bg-surface-container-lowest border-t border-outline-variant z-50">
+  <div class="flex items-center gap-8">
+    <div class="flex items-center gap-2">
+      <span class="text-[10px] font-black text-outline uppercase tracking-widest">Total Latency</span>
+      <span class="font-code-sm text-code-sm text-secondary font-bold">32,582ms</span>
+    </div>
+    <div class="flex items-center gap-2 border-l border-outline-variant pl-8">
+      <span class="text-[10px] font-black text-outline uppercase tracking-widest">Tokens</span>
+      <span class="font-code-sm text-code-sm font-bold">6,503</span>
+    </div>
+    <div class="flex items-center gap-2 border-l border-outline-variant pl-8">
+      <span class="text-[10px] font-black text-outline uppercase tracking-widest">Est. Cost</span>
+      <span class="font-code-sm text-code-sm font-bold text-on-surface">$0.00682</span>
+    </div>
+  </div>
+  <div class="flex items-center gap-4">
+    <div class="flex items-center gap-2">
+      <span class="text-[10px] font-black text-outline uppercase tracking-widest">Trace ID</span>
+      <span class="font-code-sm text-code-sm text-on-surface-variant">dd_392_8f22_99x1</span>
+      <span class="material-symbols-outlined text-[16px] text-outline cursor-pointer hover:text-primary transition-colors ml-1">content_copy</span>
+    </div>
+  </div>
+</footer>
+
+</body></html>
