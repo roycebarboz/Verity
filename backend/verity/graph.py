@@ -11,6 +11,8 @@ from verity.schemas import TicketState
 
 # 1 original attempt + up to 2 retries = 3 total drafter calls
 MAX_DRAFT_ATTEMPTS = 3
+# PRD §8.4: hard cap — escalate instead of retrying if budget exhausted
+TOKEN_BUDGET = 8_000
 
 
 def _route_after_bouncer(state: TicketState) -> str:
@@ -20,7 +22,7 @@ def _route_after_bouncer(state: TicketState) -> str:
 def _route_after_verifier(state: TicketState) -> str:
     if state.verifier_passed:
         return "dispatch"
-    if state.draft_attempts < MAX_DRAFT_ATTEMPTS:
+    if state.draft_attempts < MAX_DRAFT_ATTEMPTS and state.total_tokens < TOKEN_BUDGET:
         return "retry"
     # Forced escalation — dispatcher will see verifier_passed=False
     return "dispatch"

@@ -20,6 +20,38 @@ class RetrievedChunk(BaseModel):
     score: float = 0.0
 
 
+# --- Structured outputs for each agent (used with OpenAI JSON mode) ---
+
+class BouncerOutput(BaseModel):
+    category: str
+    severity: Literal["low", "medium", "high"]
+    injection_detected: bool
+    injection_reasoning: Optional[str] = None
+
+
+class LibrarianOutput(BaseModel):
+    queries: list[str] = Field(..., min_length=1, max_length=3)
+
+
+class DrafterOutput(BaseModel):
+    response: str
+
+
+class VerifierOutput(BaseModel):
+    passed: bool
+    failure_reasons: list[str] = Field(default_factory=list)
+    pii_detected: bool
+    citation_coverage: float = Field(ge=0.0, le=1.0)
+
+
+class DispatcherOutput(BaseModel):
+    action: Literal["send", "escalate", "request_info"]
+    reasoning: str
+    final_response: str
+
+
+# --- LangGraph state ---
+
 class TicketState(BaseModel):
     ticket_id: str = Field(default_factory=_ticket_id)
     raw_text: str
@@ -37,6 +69,7 @@ class TicketState(BaseModel):
     # Drafter outputs
     draft_response: Optional[str] = None
     draft_attempts: int = 0
+    draft_history: list[str] = Field(default_factory=list)  # one entry per attempt
 
     # Verifier outputs
     verifier_passed: Optional[bool] = None
@@ -51,6 +84,10 @@ class TicketState(BaseModel):
     # Metadata
     dd_trace_id: Optional[str] = None
     total_tokens: int = 0
+
+    # Operational metrics — populated by agents, used to build API response
+    agent_timings: dict[str, float] = Field(default_factory=dict)
+    agent_tokens: dict[str, int] = Field(default_factory=dict)
 
 
 class AgentStepResult(BaseModel):
