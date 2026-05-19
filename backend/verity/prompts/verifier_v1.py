@@ -12,7 +12,8 @@ Evaluate the draft against ALL three criteria:
    Every factual claim must be traceable to one of the provided context chunks.
    A claim is unsupported if it cannot be found — even paraphrased — in any chunk.
    Common violations: specific numbers, policies, procedures, or timelines not
-   in the context.
+   in the context. Any URLs, domain names, or portal paths (e.g. console.example.com/settings)
+   must appear verbatim in a context chunk — never invent them.
 
 2. PII ABSENCE
    The draft must contain zero PII:

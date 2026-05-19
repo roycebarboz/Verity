@@ -65,7 +65,7 @@ export default function PipelineTimeline({ streamingPipeline, activeAgent, final
         {finalResult && (
           <div className="relative space-y-8 pb-12">
             <TimelineLine />
-            {AGENT_KEYS.map(k => (
+            {AGENT_KEYS.filter(k => finalResult.pipeline[k] != null).map(k => (
               <AgentCard
                 key={k}
                 agentKey={k}

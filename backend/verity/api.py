@@ -124,7 +124,7 @@ def _build_response(state: Any, total_latency_ms: float, cost_usd: float) -> dic
     return TriageResponse(
         ticket_id=state.ticket_id,
         dd_trace_id=state.dd_trace_id,
-        pipeline={name: step(name) for name in _AGENT_MODELS},
+        pipeline={name: step(name) for name in _AGENT_MODELS if name in state.agent_timings},
         final_action=state.final_action or "escalate",
         final_response=state.final_response or "",
         citations=state.retrieved_chunks,
@@ -159,6 +159,11 @@ async def triage(request: TicketRequest) -> StreamingResponse:
     start = time.monotonic()
 
     async def event_stream():
+        from verity.guardrails import detect_pii, find_pii_types
+        if detect_pii(request.ticket_text):
+            types = find_pii_types(request.ticket_text)
+            print(f"[PII] Input contains PII ({', '.join(types)}) for ticket {initial.ticket_id} — audit will redact")
+
         last_state: TicketState = initial
         accumulated: dict = initial.model_dump()
 
