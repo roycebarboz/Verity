@@ -20,21 +20,25 @@ export interface PipelineMetrics {
   estimated_cost_usd: number
 }
 
-export interface TriageResponse {
+// Emitted by the backend as each agent finishes
+export interface AgentStepEvent {
+  agent: string
+  step: AgentStepResult
+}
+
+// Final SSE event — same shape as the old TriageResponse
+export interface PipelineDoneEvent {
   ticket_id: string
   dd_trace_id: string | null
-  pipeline: {
-    bouncer: AgentStepResult
-    librarian: AgentStepResult
-    drafter: AgentStepResult
-    verifier: AgentStepResult
-    dispatcher: AgentStepResult
-  }
+  pipeline: Record<string, AgentStepResult>
   final_action: 'send' | 'escalate' | 'request_info'
   final_response: string
   citations: RetrievedChunk[]
   metrics: PipelineMetrics
 }
+
+// Grows incrementally as agent_step events arrive
+export type StreamingPipeline = Record<string, AgentStepResult>
 
 export interface PresetTicket {
   ticket_id: string

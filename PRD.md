@@ -57,7 +57,6 @@ The core gap: there is no auditable, observable, and verifiable AI support syste
 - Customer authentication or account management
 - Real-time human-agent collaboration features
 - Multi-language support — English only for v1
-- Streaming agent output to the UI (post-hoc rendering only — see Section 7.6)
 
 ---
 
@@ -190,7 +189,7 @@ Future migration path: Amazon S3 Vector Buckets (now generally available) for pr
 The frontend is a single-page React application built with Vite and styled with Tailwind. It must demonstrate the pipeline clearly enough for a 20-minute interview audience to follow along without explanation.
 
 **Scope constraints (give to Claude Code verbatim):**
-> Build a single-page React app with three panels and a footer. No routing. No authentication. No dark mode toggle. No settings page. No user accounts. The page calls `POST /triage` once per submission and renders the response. Post-hoc rendering only — do not implement streaming or server-sent events.
+> Build a single-page React app with three panels and a footer. No routing. No authentication. No dark mode toggle. No settings page. No user accounts. The page calls `POST /triage` once per submission and renders the response using SSE streaming: each agent card reveals when the backend emits its completion event via `agent_step`, and the right panel populates on `pipeline_done`.
 
 **Layout:**
 
@@ -420,7 +419,7 @@ Deliverables:
 - Vite + React + TypeScript + Tailwind project scaffold in `frontend/`
 - Components from Section 7.6: `<App />`, `<TicketInput />`, `<PipelineTimeline />`, `<AgentCard />`, `<OutcomePanel />`, `<MetricsFooter />`
 - 4–5 preset example tickets loaded from `data/evals/eval_set.json`
-- Frontend calls local FastAPI endpoint and renders full pipeline result
+- Frontend calls local FastAPI endpoint via SSE streaming (`fetch` + `ReadableStream`); each agent card reveals as its `agent_step` event arrives; final outcome populates on `pipeline_done`
 
 **Afternoon — Deploy:**
 - Frontend built to static assets, served by FastAPI on `/` route

@@ -6,7 +6,6 @@ Read PRD.md before making non-trivial changes.
 
 ## What You Should NOT Do
 - Do not run Phase 0. Synthetic data in `data/kb/` and `data/evals/` is already complete.
-- Do not implement streaming, SSE, or WebSocket support. Post-hoc rendering only.
 - Do not add features beyond what PRD.md specifies. No dark mode, auth, routing, settings.
 - Do not use any LLM model not listed in PRD Section 7.1 and 7.2.
 - Do not commit secrets. OpenAI and Datadog keys come from AWS Secrets Manager.

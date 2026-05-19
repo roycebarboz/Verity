@@ -1,6 +1,6 @@
-import { TriageResponse } from './types'
+import { PipelineDoneEvent } from './types'
 
-export const MOCK_RESULT: TriageResponse = {
+export const MOCK_RESULT: PipelineDoneEvent = {
   ticket_id: 'tkt_20260518_a3f9',
   dd_trace_id: 'dd_392_8f22_99x1',
   pipeline: {

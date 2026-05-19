@@ -1,7 +1,7 @@
-import { TriageResponse } from '../types'
+import { PipelineDoneEvent } from '../types'
 
 interface Props {
-  result: TriageResponse | null
+  result: PipelineDoneEvent | null
   loading: boolean
 }
 
