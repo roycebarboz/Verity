@@ -166,7 +166,7 @@ export default function AgentCard({ agentKey, step, loading, verifierStep }: Pro
   const colors = statusColors(status)
   const statusLabel = {
     pending: 'Pending',
-    running: 'Running…',
+    running: 'Thinking…',
     passed: agentKey === 'bouncer' ? 'Clear'
       : agentKey === 'librarian' ? `${(step?.output.retrieved_chunks as unknown[] | null)?.length ?? 0} Chunks`
       : agentKey === 'drafter' ? 'Drafted'
@@ -255,7 +255,7 @@ export default function AgentCard({ agentKey, step, loading, verifierStep }: Pro
               )}
               {loading && (
                 <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest animate-pulse">
-                  Running…
+                  Thinking…
                 </span>
               )}
             </div>

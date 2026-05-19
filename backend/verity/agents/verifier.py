@@ -28,7 +28,7 @@ def run_verifier(state: TicketState) -> dict[str, Any]:
     print(f"[Verifier] Checking draft — attempt {attempt}")
     start = time.monotonic()
 
-    # Hard PII gate: regex catches anything the draft missed
+    # Hard PII gate: only fail if the *draft* leaks PII to the customer
     if detect_pii(state.draft_response or ""):
         ms = (time.monotonic() - start) * 1000
         return {

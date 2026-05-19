@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { TriageResponse } from '../types'
+import { PipelineDoneEvent } from '../types'
 
 interface Props {
-  result: TriageResponse | null
+  result: PipelineDoneEvent | null
 }
 
 export default function MetricsFooter({ result }: Props) {

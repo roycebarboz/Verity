@@ -1,6 +1,7 @@
-"""FastAPI application — POST /triage implements the full five-agent pipeline."""
+"""FastAPI application — POST /triage streams SSE events via LangGraph .astream()."""
 from __future__ import annotations
 
+import json
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -9,8 +10,8 @@ from typing import Any, Literal
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -92,7 +93,21 @@ _AGENT_OUTPUTS: dict[str, list[str]] = {
 }
 
 
-def _build_response(state, total_latency_ms: float, cost_usd: float) -> dict[str, Any]:
+def _step_from_state(node_name: str, state: Any) -> Any:
+    """Build an AgentStepResult from the TicketState after a node completes."""
+    from verity.schemas import AgentStepResult
+    state_dict = state.model_dump()
+    output = {k: state_dict.get(k) for k in _AGENT_OUTPUTS[node_name]}
+    return AgentStepResult(
+        model=_AGENT_MODELS[node_name],
+        latency_ms=state.agent_timings.get(node_name, 0.0),
+        tokens=state.agent_tokens.get(node_name, 0),
+        output=output,
+        attempt=state.draft_attempts if node_name in ("drafter", "verifier") else 1,
+    )
+
+
+def _build_response(state: Any, total_latency_ms: float, cost_usd: float) -> dict[str, Any]:
     from verity.schemas import AgentStepResult, PipelineMetrics, TriageResponse
 
     def step(name: str) -> AgentStepResult:
@@ -109,7 +124,7 @@ def _build_response(state, total_latency_ms: float, cost_usd: float) -> dict[str
     return TriageResponse(
         ticket_id=state.ticket_id,
         dd_trace_id=state.dd_trace_id,
-        pipeline={name: step(name) for name in _AGENT_MODELS},
+        pipeline={name: step(name) for name in _AGENT_MODELS if name in state.agent_timings},
         final_action=state.final_action or "escalate",
         final_response=state.final_response or "",
         citations=state.retrieved_chunks,
@@ -131,44 +146,54 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/triage")
-async def triage(request: TicketRequest) -> dict[str, Any]:
+async def triage(request: TicketRequest) -> StreamingResponse:
     from verity.audit import write_audit_record
     from verity.graph import pipeline
-    from verity.schemas import AgentStepResult, PipelineMetrics, TicketState, TriageResponse
-
-    start = time.monotonic()
+    from verity.schemas import TicketState
 
     initial = TicketState(
         raw_text=request.ticket_text,
         customer_id=request.customer_id,
         channel=request.channel,
     )
+    start = time.monotonic()
 
-    try:
-        result = pipeline.invoke(initial.model_dump())
-        final = TicketState.model_validate(result)
-    except Exception as exc:
-        # PRD §8.4: unhandled exceptions short-circuit to deterministic escalation
+    async def event_stream():
+        from verity.guardrails import detect_pii, find_pii_types
+        if detect_pii(request.ticket_text):
+            types = find_pii_types(request.ticket_text)
+            print(f"[PII] Input contains PII ({', '.join(types)}) for ticket {initial.ticket_id} — audit will redact")
+
+        last_state: TicketState = initial
+        accumulated: dict = initial.model_dump()
+
+        try:
+            async for chunk in pipeline.astream(initial.model_dump()):
+                node_name, partial = next(iter(chunk.items()))
+                accumulated.update(partial)
+                last_state = TicketState.model_validate(accumulated)
+                step = _step_from_state(node_name, last_state)
+                payload = {"agent": node_name, "step": step.model_dump()}
+                yield f"event: agent_step\ndata: {json.dumps(payload)}\n\n"
+
+        except Exception as exc:
+            err_payload = {"message": str(exc), "ticket_id": initial.ticket_id}
+            yield f"event: error\ndata: {json.dumps(err_payload)}\n\n"
+            last_state.final_action = "escalate"
+            last_state.final_response = f"[System error — escalated] {exc}"
+
         total_latency_ms = (time.monotonic() - start) * 1000
-        _stub = AgentStepResult(model="n/a", latency_ms=0, tokens=0, output={})
-        return TriageResponse(
-            ticket_id=initial.ticket_id,
-            pipeline={name: _stub for name in _AGENT_MODELS},
-            final_action="escalate",
-            final_response=f"[System error — escalated] {exc}",
-            metrics=PipelineMetrics(
-                total_latency_ms=round(total_latency_ms, 1),
-                total_tokens=0,
-                estimated_cost_usd=0.0,
-            ),
-        ).model_dump()
+        cost_usd = _estimate_cost(last_state.agent_tokens, _AGENT_MODELS)
+        write_audit_record(last_state, total_latency_ms, cost_usd)
 
-    total_latency_ms = (time.monotonic() - start) * 1000
-    cost_usd = _estimate_cost(final.agent_tokens, _AGENT_MODELS)
+        done_payload = _build_response(last_state, total_latency_ms, cost_usd)
+        yield f"event: pipeline_done\ndata: {json.dumps(done_payload)}\n\n"
 
-    write_audit_record(final, total_latency_ms, cost_usd)
-
-    return _build_response(final, total_latency_ms, cost_usd)
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
-import { TriageResponse } from '../types'
+import { PipelineDoneEvent } from '../types'
 
 interface Props {
-  result: TriageResponse | null
+  result: PipelineDoneEvent | null
   loading: boolean
 }
 
@@ -65,28 +65,30 @@ export default function OutcomePanel({ result, loading }: Props) {
             <div className="flex flex-col gap-3">
               <label className="font-label-md text-label-md text-on-surface-variant uppercase">Citations</label>
               <div className="flex flex-wrap gap-2">
-                {result.citations.map((c, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded-full text-on-surface-variant text-body-sm hover:bg-secondary-container hover:text-on-secondary-container transition-colors cursor-help"
-                    title={c.doc_title}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">description</span>
-                    {c.source}
-                  </div>
-                ))}
+                {result.citations
+                  .filter((c, i, arr) => arr.findIndex(x => x.source === c.source) === i)
+                  .map((c) => (
+                    <div
+                      key={c.source}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded-full text-on-surface-variant text-body-sm hover:bg-secondary-container hover:text-on-secondary-container transition-colors cursor-help"
+                      title={c.doc_title}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">description</span>
+                      {c.source}
+                    </div>
+                  ))}
               </div>
             </div>
           )}
 
           {/* Verifier Reasoning */}
-          {result.pipeline.verifier.output.verifier_passed !== undefined && (
+          {result.pipeline.verifier?.output?.verifier_passed !== undefined && (
             <div className="flex flex-col gap-2">
               <label className="font-label-md text-label-md text-on-surface-variant uppercase">Verifier Reasoning</label>
               <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant text-body-sm text-on-surface-variant leading-relaxed">
-                {result.pipeline.verifier.output.verifier_passed
-                  ? `Verification passed. Citation coverage: ${typeof result.pipeline.verifier.output.citation_coverage === 'number' ? (result.pipeline.verifier.output.citation_coverage as number).toFixed(3) : '—'}. No PII detected.`
-                  : `Verification failed after ${result.pipeline.drafter.attempt} attempt(s). Reasons: ${(result.pipeline.verifier.output.verifier_failure_reasons as string[] ?? []).join(', ') || 'none recorded'}.`
+                {result.pipeline.verifier?.output?.verifier_passed
+                  ? `Verification passed. Citation coverage: ${typeof result.pipeline.verifier?.output?.citation_coverage === 'number' ? (result.pipeline.verifier?.output?.citation_coverage as number).toFixed(3) : '—'}. ${result.pipeline.verifier?.output?.pii_detected ? 'PII detected in input.' : 'No PII detected.'}`
+                  : `Verification failed after ${result.pipeline.drafter?.attempt ?? 0} attempt(s). Reasons: ${(result.pipeline.verifier?.output?.verifier_failure_reasons as string[] ?? []).join(', ') || 'none recorded'}.`
                 }
               </div>
             </div>
