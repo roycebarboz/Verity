@@ -29,6 +29,10 @@ def run_dispatcher(state: TicketState) -> dict[str, Any]:
     if state.category in _ESCALATE_CATEGORIES:
         return _fast_escalate(state, start, f"Category '{state.category}' requires human review")
 
+    # Drafter flagged the ticket as too vague to answer — ask the customer for details
+    if state.draft_needs_clarification:
+        return _fast_request_info(state, start)
+
     user_content = (
         f"Ticket category: {state.category} | Severity: {state.severity}\n\n"
         f"Customer ticket:\n{state.raw_text}\n\n"
@@ -78,6 +82,19 @@ def _fast_escalate(state: TicketState, start: float, reason: str) -> dict[str, A
     return {
         "final_action": "escalate",
         "final_response": f"[Escalated] {reason}.",
+        "agent_timings": {**state.agent_timings, "dispatcher": round(ms, 1)},
+        "agent_tokens": {**state.agent_tokens, "dispatcher": 0},
+    }
+
+
+def _fast_request_info(state: TicketState, start: float) -> dict[str, Any]:
+    """Vague ticket — send the Drafter's clarifying question back to the customer."""
+    ms = (time.monotonic() - start) * 1000
+    return {
+        "final_action": "request_info",
+        "final_response": state.draft_response
+        or "Could you share more details about the issue — which product area is "
+        "affected, any error message you see, and what you were doing when it happened?",
         "agent_timings": {**state.agent_timings, "dispatcher": round(ms, 1)},
         "agent_tokens": {**state.agent_tokens, "dispatcher": 0},
     }

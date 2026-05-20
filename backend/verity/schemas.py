@@ -35,6 +35,7 @@ class LibrarianOutput(BaseModel):
 
 class DrafterOutput(BaseModel):
     response: str
+    needs_clarification: bool = False
 
 
 class VerifierOutput(BaseModel):
@@ -70,6 +71,7 @@ class TicketState(BaseModel):
     draft_response: Optional[str] = None
     draft_attempts: int = 0
     draft_history: list[str] = Field(default_factory=list)  # one entry per attempt
+    draft_needs_clarification: bool = False  # ticket too vague to answer — route request_info
 
     # Verifier outputs
     verifier_passed: Optional[bool] = None
