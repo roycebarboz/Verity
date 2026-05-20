@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Component, ReactNode, useState } from 'react'
 import TicketInput from './components/TicketInput'
 import PipelineTimeline from './components/PipelineTimeline'
 import OutcomePanel from './components/OutcomePanel'
@@ -7,6 +7,24 @@ import { AgentStepEvent, PipelineDoneEvent, StreamingPipeline } from './types'
 import { MOCK_RESULT } from './mockData'
 
 const IS_DEMO = new URLSearchParams(window.location.search).has('demo')
+
+// Catches render-time exceptions (e.g. unexpected pipeline_done shape) so the
+// page degrades gracefully instead of blanking — a stale bundle once crashed
+// the whole UI on the bouncer-blocked path.
+class RenderErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  componentDidCatch(error: Error) { console.error('UI render error:', error) }
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <div className="flex items-center gap-3 px-margin-page py-3 bg-error-container text-on-error-container text-body-sm border-b border-outline-variant flex-shrink-0">
+        <span className="material-symbols-outlined text-[18px]">error</span>
+        Something went wrong rendering this result. Refresh and try again.
+      </div>
+    )
+  }
+}
 
 // Mirrors the LangGraph conditional edges — determines which agent runs next.
 function nextAgent(agent: string, output: Record<string, unknown>): string | null {
@@ -117,18 +135,20 @@ export default function App() {
       )}
 
       {/* Main content */}
-      <main className="flex flex-1 overflow-hidden">
-        <TicketInput onSubmit={handleSubmit} loading={loading} />
-        <PipelineTimeline
-          streamingPipeline={streamingPipeline}
-          activeAgent={activeAgent}
-          finalResult={finalResult}
-          loading={loading}
-        />
-        <OutcomePanel result={finalResult} loading={loading} />
-      </main>
+      <RenderErrorBoundary>
+        <main className="flex flex-1 overflow-hidden">
+          <TicketInput onSubmit={handleSubmit} loading={loading} />
+          <PipelineTimeline
+            streamingPipeline={streamingPipeline}
+            activeAgent={activeAgent}
+            finalResult={finalResult}
+            loading={loading}
+          />
+          <OutcomePanel result={finalResult} loading={loading} />
+        </main>
 
-      <MetricsFooter result={finalResult} />
+        <MetricsFooter result={finalResult} />
+      </RenderErrorBoundary>
     </div>
   )
 }

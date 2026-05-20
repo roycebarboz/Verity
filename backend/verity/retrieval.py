@@ -14,12 +14,32 @@ COLLECTION_NAME = "verity_kb"
 TOP_K = 5
 
 
+def _download_from_s3(chroma_dir: str) -> None:
+    """Pull prebuilt Chroma index from S3 when running in Fargate (no local disk)."""
+    bucket = os.environ.get("S3_CHROMA_BUCKET")
+    if not bucket:
+        return
+    import boto3
+    print(f"[retrieval] Downloading Chroma index from s3://{bucket}/chroma/ → {chroma_dir}")
+    s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix="chroma/"):
+        for obj in page.get("Contents", []):
+            key: str = obj["Key"]
+            local_path = Path(chroma_dir) / key[len("chroma/"):]
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            s3.download_file(bucket, key, str(local_path))
+    print("[retrieval] Chroma index download complete")
+
+
 @lru_cache(maxsize=1)
 def _get_collection() -> chromadb.Collection:
     chroma_dir = os.environ.get(
         "CHROMA_DIR",
         str(Path(__file__).parent.parent.parent / "data" / "chroma"),
     )
+    if not Path(chroma_dir).exists():
+        _download_from_s3(chroma_dir)
     client = chromadb.PersistentClient(path=chroma_dir)
     return client.get_collection(COLLECTION_NAME)
 

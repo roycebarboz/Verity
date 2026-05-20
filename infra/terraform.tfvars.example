@@ -1,0 +1,14 @@
+# Copy this file to terraform.tfvars and fill in real values before running terraform apply.
+# terraform.tfvars is gitignored — never commit it.
+
+aws_region = "us-east-1"
+
+# Get this after: docker build + docker push (Step 4 in Phase 4)
+ecr_image_uri = "913092306519.dkr.ecr.us-east-1.amazonaws.com/verity:latest"
+
+# Get these ARNs after running the aws secretsmanager create-secret commands (Step 1 in Phase 4)
+openai_secret_arn = "arn:aws:secretsmanager:us-east-1:913092306519:secret:verity/openai-key-cgmHXk"
+dd_secret_arn     = "arn:aws:secretsmanager:us-east-1:913092306519:secret:verity/datadog-api-key-m3epwS"
+
+# Match your Datadog account region — check your .env for DD_SITE
+dd_site = "us5.datadoghq.com"

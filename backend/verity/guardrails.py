@@ -46,6 +46,7 @@ _INJECTION_PATTERNS = [
         r"act\s+as\s+(if\s+you\s+are|a\s+)",
         r"system\s*:\s*you",
         r"<\s*/?\s*system\s*>",
+        r"===\s*[A-Z_]+\s*===",              # ===SYSTEM===, ===USER=== delimiter attacks
         r"\[INST\]",
         r"\bDAN\b",
         r"jailbreak",

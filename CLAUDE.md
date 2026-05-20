@@ -42,9 +42,9 @@ scripts/        One-off scripts (ingestion, eval runner)
 ## Session Workflow
 This project is built across multiple Claude Code sessions:
 - Session 1: Backend (Phases 1+2 from PRD)
-- Session 2: Infrastructure deployment (Phase 3 afternoon)
-- Session 3: Frontend (Phase 3 morning, run against live backend)
-- Session 4: Polish, eval, demo prep (Phase 4)
+- Session 2: Frontend (Phase 3 from PRD — run against local backend)
+- Session 3: Deployment (Phase 4 from PRD — AWS infra, ECR push, Datadog wiring)
+- Session 4: Polish, eval, demo prep (Phase 5 from PRD)
 
 Each session should stop at its phase boundary. Do not implement work from a later phase.
 
