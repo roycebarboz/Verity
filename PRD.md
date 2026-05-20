@@ -302,10 +302,12 @@ interface TriageResponse {
   - **Quality:** faithfulness distribution, citation coverage distribution, injection detection count, Verifier rejection reasons
 
 ### 8.3 Performance
-- End-to-end P50 latency: ≤ 6 seconds
-- End-to-end P95 latency: ≤ 12 seconds
+- End-to-end P50 latency: ≤ 30 seconds
+- End-to-end P95 latency: ≤ 90 seconds
 - Cost per ticket: ≤ $0.005 at demo scale (5 agent calls, total ~1.5K tokens)
 - Frontend initial page load: ≤ 2 seconds
+
+Latency targets reflect the cost of correctness-first design: the Verifier runs on `gpt-5-mini` (reasoning tier) and the Drafter↔Verifier loop is bounded at three attempts, so worst-case paths execute the reasoning model three times. Verity is positioned for asynchronous support triage (queued tickets reviewed by an agent before send), not synchronous chat — sub-second response is an explicit non-goal.
 
 ### 8.4 Reliability
 - OpenAI API calls wrapped in exponential backoff (3 attempts, jittered) on 429/5xx
@@ -412,27 +414,140 @@ Deliverables:
 
 **Acceptance:** A `curl` POST to localhost returns a valid response matching the API schema; the same request appears as a 5-span trace in Datadog.
 
-### Phase 3 — Frontend, Deployment, and Observability (Day 3, Monday May 18)
-**Goal:** Live public endpoint with React UI and full observability.
+### Phase 3 — Frontend (Day 3 Morning, Monday May 18)
+**Goal:** React UI running against local backend, all components complete.
 
-**Morning — Frontend:**
+Deliverables:
 - Vite + React + TypeScript + Tailwind project scaffold in `frontend/`
 - Components from Section 7.6: `<App />`, `<TicketInput />`, `<PipelineTimeline />`, `<AgentCard />`, `<OutcomePanel />`, `<MetricsFooter />`
 - 4–5 preset example tickets loaded from `data/evals/eval_set.json`
 - Frontend calls local FastAPI endpoint via SSE streaming (`fetch` + `ReadableStream`); each agent card reveals as its `agent_step` event arrives; final outcome populates on `pipeline_done`
+- Minimum 2 screenshot comparison rounds against `mock_design.html` reference (see `.claude/rules/screenshot-loop.md`)
 
-**Afternoon — Deploy:**
-- Frontend built to static assets, served by FastAPI on `/` route
-- Container pushed to ECR
-- Fargate service + ALB + DynamoDB + S3 + Secrets Manager deployed via IaC
-- Datadog dashboards built (Operations + Quality)
-- Custom citation coverage evaluation deployed and attaching to traces
-- Offline eval suite (`scripts/run_eval.py`) executes 30 tickets against live endpoint and writes results to `eval_results/`
-- Results committed to repo
+**Acceptance:** All five agent cards animate correctly on a local ticket submission; layout matches the mock design reference; no console errors.
 
-**Acceptance:** Public URL returns the React UI; submitting any preset ticket triggers full pipeline; Datadog shows traces from production endpoint; eval suite passes acceptance thresholds in Section 11.
+---
 
-### Phase 4 — Polish and Delivery (Day 4, Tuesday May 19)
+### Phase 4 — Deployment and Observability (Day 3 Afternoon, Monday May 18)
+**Goal:** Live public HTTPS endpoint on AWS with full observability wired end-to-end.
+
+#### Step 1 — Pre-flight: store secrets
+Store both API keys in AWS Secrets Manager before any infra is provisioned. The ECS task definition will reference these by ARN — keys never appear in Terraform state, logs, or the console.
+
+```bash
+aws secretsmanager create-secret --name verity/openai-key \
+  --secret-string "<OPENAI_API_KEY>" --region us-east-1
+
+aws secretsmanager create-secret --name verity/datadog-api-key \
+  --secret-string "<DD_API_KEY>" --region us-east-1
+```
+
+#### Step 2 — Build the Chroma index and push to S3
+The Fargate container has no persistent local disk. The index must live in S3 and be downloaded at container startup.
+
+```bash
+# Build index from KB documents
+python scripts/ingest_kb.py
+
+# Create bucket and push index
+aws s3 mb s3://verity-chroma-index --region us-east-1
+aws s3 sync data/chroma/ s3://verity-chroma-index/chroma/
+```
+
+Add startup S3 download logic to `backend/verity/retrieval.py`: if `CHROMA_DIR` is absent on disk, download from `S3_CHROMA_BUCKET` using boto3 before initializing the Chroma client.
+
+#### Step 3 — Build frontend and bundle into the container
+The React build is served as static files by FastAPI so there is one container, one origin, and zero CORS complexity in production.
+
+```bash
+cd frontend && npm run build          # outputs to frontend/dist/
+cp -r frontend/dist/ backend/static/  # FastAPI serves from here
+```
+
+Add to `backend/verity/api.py` (after all API routes are registered):
+```python
+from fastapi.staticfiles import StaticFiles
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
+```
+
+#### Step 4 — Push container image to ECR
+
+```bash
+# One-time: create the registry
+aws ecr create-repository --repository-name verity --region us-east-1
+
+# Build and push
+cd backend
+docker build -t verity:latest .
+aws ecr get-login-password --region us-east-1 \
+  | docker login --username AWS --password-stdin \
+    <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+docker tag verity:latest \
+  <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/verity:latest
+docker push \
+  <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/verity:latest
+```
+
+#### Step 5 — Write and apply Terraform IaC
+Create `infra/main.tf` covering the following resources in order:
+
+| Resource | Purpose |
+|---|---|
+| `aws_iam_role` + `aws_iam_policy` | Least-privilege task role: `secretsmanager:GetSecretValue` on both secrets; `dynamodb:PutItem` on audit table; `s3:GetObject` on the Chroma bucket |
+| `aws_dynamodb_table` | `verity-audit` table, `ticket_id` hash key, `PAY_PER_REQUEST` billing |
+| `aws_ecr_repository` | Container image registry (can import the one created in Step 4) |
+| `aws_ecs_cluster` | Logical grouping for the Fargate service |
+| `aws_ecs_task_definition` | Container spec: ECR image, 0.25 vCPU / 512 MB, port 8000, env vars injected from Secrets Manager ARNs, `AWS_REGION` and `DYNAMODB_TABLE` set directly |
+| `aws_lb` + `aws_lb_target_group` + `aws_lb_listener` | Public-facing ALB on port 443 (HTTPS); forwards to the Fargate task on port 8000; uses ACM certificate |
+| `aws_ecs_service` | Runs the task definition behind the ALB; desired count = 1; Fargate launch type; public subnet; security group allows inbound only from the ALB |
+| `aws_security_group` × 2 | One for the ALB (allow 443 from `0.0.0.0/0`); one for the task (allow 8000 from the ALB security group only) |
+
+```bash
+cd infra
+terraform init
+terraform plan    # review before applying
+terraform apply
+```
+
+**Cost containment:** Set a $30 billing alarm immediately after `terraform apply`. Tear down with `terraform destroy` within 24 hours of the presentation.
+
+#### Step 6 — DynamoDB table (if not created by Terraform)
+If the Terraform apply created the table, skip this. Otherwise:
+
+```bash
+aws dynamodb create-table \
+  --table-name verity-audit \
+  --attribute-definitions AttributeName=ticket_id,AttributeType=S \
+  --key-schema AttributeName=ticket_id,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
+```
+
+#### Step 7 — Verify traces in Datadog
+Submit one ticket against the public ALB URL. Confirm in the Datadog UI:
+- One workflow trace with five named LLM spans (`bouncer`, `librarian`, `drafter`, `verifier`, `dispatcher`)
+- Each span tagged with `agent_name`, `model`, `ticket_id`, `severity`, `attempt_number`, `prompt_template_version`
+- Faithfulness and citation coverage evaluations attached to the Drafter span
+
+#### Step 8 — Run offline eval suite against production
+```bash
+TRIAGE_URL=https://<alb-dns>/triage python scripts/run_eval.py
+# Results written to eval_results/
+git add eval_results/ && git commit -m "eval: production run results Phase 4"
+```
+
+#### Step 9 — Build Datadog dashboards
+Create two dashboards manually in the Datadog UI:
+- **Operations:** request rate, P50/P95 latency, cost per ticket, escalation rate, retry rate
+- **Quality:** faithfulness distribution, citation coverage distribution, injection detection count, Verifier rejection reasons
+
+**Acceptance:** Public ALB URL returns the React UI; submitting any preset ticket triggers the full pipeline with SSE streaming; Datadog shows traces from the production endpoint; eval suite passes the thresholds in Section 11.
+
+**Fallback (if AWS networking delays):** Run FastAPI locally, expose with `ngrok http 8000`, update the frontend's API base URL to the ngrok URL, demo against that. Note the production Terraform IaC in the written report.
+
+---
+
+### Phase 5 — Polish and Delivery (Day 4, Tuesday May 19)
 **Goal:** Ship the assignment.
 
 Deliverables:

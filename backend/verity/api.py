@@ -182,11 +182,31 @@ async def triage(request: TicketRequest) -> StreamingResponse:
             last_state.final_action = "escalate"
             last_state.final_response = f"[System error — escalated] {exc}"
 
+        # Always emit pipeline_done so the frontend leaves its loading state,
+        # even if audit/response-building fails. The audit module already swallows
+        # its own errors, but _build_response could still raise on malformed state.
         total_latency_ms = (time.monotonic() - start) * 1000
-        cost_usd = _estimate_cost(last_state.agent_tokens, _AGENT_MODELS)
-        write_audit_record(last_state, total_latency_ms, cost_usd)
+        try:
+            cost_usd = _estimate_cost(last_state.agent_tokens, _AGENT_MODELS)
+            write_audit_record(last_state, total_latency_ms, cost_usd)
+            done_payload = _build_response(last_state, total_latency_ms, cost_usd)
+        except Exception as exc:
+            err_payload = {"message": f"post-stream failure: {exc}", "ticket_id": initial.ticket_id}
+            yield f"event: error\ndata: {json.dumps(err_payload)}\n\n"
+            done_payload = {
+                "ticket_id": initial.ticket_id,
+                "dd_trace_id": last_state.dd_trace_id,
+                "pipeline": {},
+                "final_action": "escalate",
+                "final_response": f"[System error — escalated] {exc}",
+                "citations": [],
+                "metrics": {
+                    "total_latency_ms": round(total_latency_ms, 1),
+                    "total_tokens": last_state.total_tokens,
+                    "estimated_cost_usd": 0.0,
+                },
+            }
 
-        done_payload = _build_response(last_state, total_latency_ms, cost_usd)
         yield f"event: pipeline_done\ndata: {json.dumps(done_payload)}\n\n"
 
     return StreamingResponse(
@@ -197,9 +217,14 @@ async def triage(request: TicketRequest) -> StreamingResponse:
 
 
 # ---------------------------------------------------------------------------
-# Serve React static build (Phase 3 — no-op if dist/ doesn't exist yet)
+# Serve React static build — check container path first, then local dev path
 # ---------------------------------------------------------------------------
 
-_frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
-if _frontend_dist.exists():
-    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="static")
+_static_candidates = [
+    Path(__file__).parent.parent / "static",                    # /app/static in container
+    Path(__file__).parent.parent.parent / "frontend" / "dist",  # local dev
+]
+for _static_path in _static_candidates:
+    if (_static_path / "index.html").exists():
+        app.mount("/", StaticFiles(directory=str(_static_path), html=True), name="static")
+        break
