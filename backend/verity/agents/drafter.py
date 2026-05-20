@@ -73,6 +73,7 @@ def run_drafter(state: TicketState) -> dict[str, Any]:
         "draft_response": output.response,
         "draft_attempts": attempt,
         "draft_history": state.draft_history + [output.response],
+        "draft_needs_clarification": output.needs_clarification,
         "agent_timings": {**state.agent_timings, "drafter": round(ms, 1)},
         "agent_tokens": {**state.agent_tokens, "drafter": tokens},
         "total_tokens": state.total_tokens + tokens,
