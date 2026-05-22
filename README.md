@@ -18,6 +18,7 @@ Multi-Agent System* (Wipro, May 2026).
 | **Written Report** (1–2 page required writeup) | [`report.pdf`](report.pdf) |
 | **Sample Prompts** (all 5 agent system prompts) | [`doc/PROMPTS.md`](doc/PROMPTS.md) |
 | **Live Demo** | http://verity-alb-2072832666.us-east-1.elb.amazonaws.com/ *(see HTTP note below)* |
+| **Demo Video** | [YouTube — Project Walkthrough](https://youtu.be/nL_729YpNCs) |
 | **Architecture Diagram** | [Agent pipeline](#agent-architecture) · [AWS topology](#aws-deployment) |
 
 ---
@@ -44,6 +45,9 @@ Multi-Agent System* (Wipro, May 2026).
 > 4. **The endpoint is ephemeral.** Per the cost-containment plan, the AWS stack is
 >    torn down within ~24 hours of the presentation. If the link is down, run the
 >    system locally — see [Running Locally](#-running-locally).
+>
+> 5. **If the live demo is unavailable** (OpenAI key revoked or stack torn down), watch
+>    the full walkthrough video instead: [https://youtu.be/nL_729YpNCs](https://youtu.be/nL_729YpNCs)
 
 **Endpoints:**
 
