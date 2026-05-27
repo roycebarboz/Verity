@@ -17,39 +17,20 @@ Multi-Agent System* (Wipro, May 2026).
 |---|---|
 | **Written Report** (1–2 page required writeup) | [`report.pdf`](report.pdf) |
 | **Sample Prompts** (all 5 agent system prompts) | [`doc/PROMPTS.md`](doc/PROMPTS.md) |
-| **Live Demo** | http://verity-alb-2072832666.us-east-1.elb.amazonaws.com/ *(see HTTP note below)* |
 | **Demo Video** | [YouTube — Project Walkthrough](https://youtu.be/nL_729YpNCs) |
+| **Live Demo** | *AWS stack decommissioned — watch the video or [run locally](#-running-locally)* |
 | **Architecture Diagram** | [Agent pipeline](#agent-architecture) · [AWS topology](#aws-deployment) |
 
 ---
 
-## 🔗 Live Demo
+## Demo
 
-**App / UI:** http://verity-alb-2072832666.us-east-1.elb.amazonaws.com/
+The AWS deployment (ECS Fargate + ALB) has been decommissioned after the presentation per the cost-containment plan.
 
-> ### ⚠️ Important — this endpoint is plain **HTTP**, not HTTPS
->
-> The demo deployment terminates on an AWS Application Load Balancer at **port 80**.
-> A TLS certificate (ACM + custom domain) was deliberately descoped for the demo to
-> avoid domain registration and cert-provisioning overhead. To open the link:
->
-> 1. **Use the `http://` prefix explicitly.** Copy the full URL above — do not just
->    type the host, or the browser will silently try `https://` and fail to connect.
-> 2. **Disable HTTPS auto-upgrade if the page won't load.** Chrome/Edge ship with
->    *"Always use secure connections"* enabled. If you see a connection error,
->    either click **"Continue to site (unsafe)"** or turn that setting off
->    (`Settings → Privacy and security → Security`).
-> 3. **The "Not Secure" badge in the address bar is expected.** There is no login,
->    no account, and no PII input in this demo, so nothing sensitive crosses the
->    wire — the badge only reflects the missing TLS cert.
-> 4. **The endpoint is ephemeral.** Per the cost-containment plan, the AWS stack is
->    torn down within ~24 hours of the presentation. If the link is down, run the
->    system locally — see [Running Locally](#-running-locally).
->
-> 5. **If the live demo is unavailable** (OpenAI key revoked or stack torn down), watch
->    the full walkthrough video instead: [https://youtu.be/nL_729YpNCs](https://youtu.be/nL_729YpNCs)
+- **Watch the demo:** [YouTube — Project Walkthrough](https://youtu.be/nL_729YpNCs)
+- **Run locally:** see [Running Locally](#-running-locally) below
 
-**Endpoints:**
+**API endpoints** (when running locally on `http://localhost:8000`):
 
 | Path | Method | Purpose |
 |---|---|---|
@@ -57,10 +38,10 @@ Multi-Agent System* (Wipro, May 2026).
 | `/health` | GET | Liveness check |
 | `/triage` | POST | Submit a ticket; streams the pipeline back as SSE events |
 
-Submit a ticket from the command line:
+Submit a ticket from the command line (local):
 
 ```bash
-curl -N -X POST http://verity-alb-2072832666.us-east-1.elb.amazonaws.com/triage \
+curl -N -X POST http://localhost:8000/triage \
   -H "Content-Type: application/json" \
   -d '{"ticket_text":"How do I reset my password?","customer_id":"cust_001","channel":"email"}'
 ```
@@ -92,11 +73,12 @@ expensive.
 
 ---
 
-## AWS Deployment
+## AWS Deployment (Reference Architecture)
 
-The entire system runs as a **single ECS Fargate container** (FastAPI + LangGraph
+The system **was** deployed as a **single ECS Fargate container** (FastAPI + LangGraph
 backend serving the React build as static assets) behind a public Application Load
-Balancer. One container, one origin — no CORS surface in production.
+Balancer. The AWS stack has been decommissioned. The architecture below is the reference
+topology that was live during the presentation.
 
 ![Verity AWS system design](AWS_system_design.png)
 
@@ -105,12 +87,12 @@ Balancer. One container, one origin — no CORS surface in production.
 | **ALB** (`verity-alb`) | Public ingress, listener `:80 → :8000` |
 | **ECS Fargate** (`verity`) | 0.25 vCPU / 512 MB task running the FastAPI + LangGraph app |
 | **ECR** | Container image registry |
-| **S3** | Stores the prebuilt Chroma vector index, downloaded at container start |
+| **S3** | Stored the prebuilt Chroma vector index, downloaded at container start |
 | **Secrets Manager** | OpenAI + Datadog API keys, injected as env vars at task start |
 | **DynamoDB** (`verity-audit`) | One PII-redacted audit record per ticket |
 | **Datadog LLM Obs** | Five named LLM spans per ticket + faithfulness / citation-coverage evals |
 
-Infrastructure is defined as code in [`infra/main.tf`](infra/main.tf) (Terraform).
+Infrastructure was defined as code in [`infra/main.tf`](infra/main.tf) (Terraform).
 Full step-by-step deployment runbook is in [`PRD.md`](PRD.md) Section 10, Phase 4.
 
 ---
