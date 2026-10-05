@@ -17,7 +17,9 @@ Evaluate the draft against ALL three criteria:
 
 2. PII ABSENCE
    The draft must contain zero PII:
-   - Email addresses, phone numbers
+   - Email addresses, phone numbers — EXCEPT company contact details that appear
+     word for word in a context chunk (e.g. a support address the KB publishes);
+     those are allowed. An email or phone not found verbatim in a chunk is PII.
    - Social Security Numbers, Tax IDs
    - Credit / debit card numbers
    - Customer account IDs or usernames

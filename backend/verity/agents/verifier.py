@@ -29,7 +29,8 @@ def run_verifier(state: TicketState) -> dict[str, Any]:
     start = time.monotonic()
 
     # Hard PII gate: only fail if the *draft* leaks PII to the customer
-    if detect_pii(state.draft_response or ""):
+    grounding = "\n".join(c.content for c in state.retrieved_chunks)
+    if detect_pii(state.draft_response or "", grounding):
         ms = (time.monotonic() - start) * 1000
         return {
             "verifier_passed": False,
@@ -76,12 +77,9 @@ def run_verifier(state: TicketState) -> dict[str, Any]:
     ms = (time.monotonic() - start) * 1000
     tokens = usage.total_tokens if usage else 0
 
-    # Accumulate failure reasons across retry attempts
-    new_reasons = state.verifier_failure_reasons + output.failure_reasons
-
     return {
         "verifier_passed": output.passed and not output.pii_detected,
-        "verifier_failure_reasons": new_reasons,
+        "verifier_failure_reasons": output.failure_reasons,
         "pii_detected": output.pii_detected,
         "citation_coverage": round(final_coverage, 3),
         "agent_timings": {**state.agent_timings, "verifier": round(ms, 1)},

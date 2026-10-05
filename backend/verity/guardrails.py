@@ -60,8 +60,18 @@ def regex_injection_detected(text: str) -> bool:
     return any(p.search(text) for p in _INJECTION_PATTERNS)
 
 
-def detect_pii(text: str) -> bool:
-    return any(pattern.search(text) for _, pattern in _PII_PATTERNS)
+# Contact details that may be quoted when they appear verbatim in retrieved context.
+_GROUNDABLE = {"email", "phone"}
+
+
+def detect_pii(text: str, grounding: str = "") -> bool:
+    """True if text contains PII. Emails/phones found verbatim in `grounding` are allowed."""
+    for label, pattern in _PII_PATTERNS:
+        for m in pattern.finditer(text):
+            if label in _GROUNDABLE and m.group().strip() in grounding:
+                continue
+            return True
+    return False
 
 
 def find_pii_types(text: str) -> list[str]:

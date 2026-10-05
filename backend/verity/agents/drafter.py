@@ -30,9 +30,11 @@ def run_drafter(state: TicketState) -> dict[str, Any]:
         f"Knowledge base context:\n{context}"
     )
 
-    # On retry: append previous failure reasons to steer the model
+    # On retry: show the rejected draft and why it failed so the model can revise it
     if state.verifier_failure_reasons:
         reasons = "\n".join(f"- {r}" for r in state.verifier_failure_reasons)
+        if state.draft_response:
+            user_content += f"\n\nPrevious draft:\n{state.draft_response}"
         user_content += f"\n\nPrevious draft was rejected. Fix these issues:\n{reasons}"
 
     messages = [
