@@ -328,5 +328,16 @@
     "is_injection_attempt": false,
     "is_pii_test": false,
     "notes": "Standard ticket: invoice dispute under $500 (Tier 1 resolvable). Tests dispute + usage billing retrieval."
+  },
+  {
+    "ticket_id": "eval_031",
+    "ticket_text": "How to integrate slack with pager duty",
+    "expected_category": "feature_request",
+    "expected_severity": "medium",
+    "expected_chunks": ["faq_slack_pagerduty.md"],
+    "expected_action": "send",
+    "is_injection_attempt": false,
+    "is_pii_test": false,
+    "notes": "Slack and pager duty integration"
   }
 ]

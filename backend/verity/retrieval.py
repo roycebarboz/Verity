@@ -8,7 +8,7 @@ from pathlib import Path
 import chromadb
 
 from verity.llm import EMBED_MODEL, get_client
-from verity.schemas import RetrievedChunk
+from verity.schemas import QueryRetrieval, RetrievedChunk
 
 COLLECTION_NAME = "verity_kb"
 TOP_K = 5
@@ -49,29 +49,39 @@ def _embed(texts: list[str]) -> list[list[float]]:
     return [item.embedding for item in resp.data]
 
 
-def query_kb(queries: list[str], top_k: int = TOP_K) -> list[RetrievedChunk]:
-    """Embed queries, query Chroma, deduplicate by source+chunk, return top_k."""
-    collection = _get_collection()
-    embeddings = _embed(queries)
-
-    results = collection.query(
-        query_embeddings=embeddings,
-        n_results=top_k,
-        include=["documents", "metadatas", "distances"],
-    )
-
+def merge_chunks(by_query: list[QueryRetrieval], top_k: int = TOP_K) -> list[RetrievedChunk]:
+    """Deduplicate by source+chunk across queries, return the top_k by score."""
     seen: set[str] = set()
     chunks: list[RetrievedChunk] = []
-
-    for docs, metas, dists in zip(
-        results["documents"], results["metadatas"], results["distances"]
-    ):
-        for doc, meta, dist in zip(docs, metas, dists):
-            uid = f"{meta['source']}_{meta['chunk_index']}"
+    for retrieval in by_query:
+        for chunk in retrieval.chunks:
+            uid = f"{chunk.source}_{chunk.chunk_index}"
             if uid in seen:
                 continue
             seen.add(uid)
-            chunks.append(
+            chunks.append(chunk)
+
+    chunks.sort(key=lambda c: c.score, reverse=True)
+    return chunks[:top_k]
+
+
+def query_kb(queries: list[str], top_k: int = TOP_K) -> list[RetrievedChunk]:
+    """Embed queries, query Chroma, deduplicate by source+chunk, return top_k."""
+    return merge_chunks(query_kb_by_query(queries, top_k), top_k)
+
+
+def query_kb_by_query(queries: list[str], top_k: int = TOP_K) -> list[QueryRetrieval]:
+    """Return the top_k chunks for each query separately (no merge, no dedupe)."""
+    collection = _get_collection()
+    results = collection.query(
+        query_embeddings=_embed(queries),
+        n_results=top_k,
+        include=["documents", "metadatas", "distances"],
+    )
+    return [
+        QueryRetrieval(
+            query=query,
+            chunks=[
                 RetrievedChunk(
                     content=doc,
                     source=meta["source"],
@@ -79,7 +89,10 @@ def query_kb(queries: list[str], top_k: int = TOP_K) -> list[RetrievedChunk]:
                     chunk_index=meta["chunk_index"],
                     score=round(1.0 - float(dist), 4),
                 )
-            )
-
-    chunks.sort(key=lambda c: c.score, reverse=True)
-    return chunks[:top_k]
+                for doc, meta, dist in zip(docs, metas, dists)
+            ],
+        )
+        for query, docs, metas, dists in zip(
+            queries, results["documents"], results["metadatas"], results["distances"]
+        )
+    ]

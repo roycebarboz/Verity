@@ -128,6 +128,7 @@ def _build_response(state: Any, total_latency_ms: float, cost_usd: float) -> dic
         final_action=state.final_action or "escalate",
         final_response=state.final_response or "",
         citations=state.retrieved_chunks,
+        retrieval_by_query=state.retrieval_by_query,
         metrics=PipelineMetrics(
             total_latency_ms=round(total_latency_ms, 1),
             total_tokens=state.total_tokens,

@@ -20,6 +20,13 @@ class RetrievedChunk(BaseModel):
     score: float = 0.0
 
 
+class QueryRetrieval(BaseModel):
+    """Chunks Chroma returned for one Librarian query, before merging across queries."""
+
+    query: str
+    chunks: list[RetrievedChunk]
+
+
 # --- Structured outputs for each agent (used with OpenAI JSON mode) ---
 
 class BouncerOutput(BaseModel):
@@ -66,6 +73,7 @@ class TicketState(BaseModel):
 
     # Librarian outputs
     retrieved_chunks: list[RetrievedChunk] = Field(default_factory=list)
+    retrieval_by_query: list[QueryRetrieval] = Field(default_factory=list)  # pre-merge, per query
 
     # Drafter outputs
     draft_response: Optional[str] = None
@@ -113,4 +121,5 @@ class TriageResponse(BaseModel):
     final_action: Literal["send", "escalate", "request_info"]
     final_response: str
     citations: list[RetrievedChunk] = Field(default_factory=list)
+    retrieval_by_query: list[QueryRetrieval] = Field(default_factory=list)
     metrics: PipelineMetrics

@@ -7,7 +7,7 @@ from typing import Any
 from verity.llm import LIBRARIAN_MODEL, parse_json_with_retry
 from verity.observability import annotate_span, llm_span
 from verity.prompts.librarian_v1 import SYSTEM, VERSION
-from verity.retrieval import query_kb
+from verity.retrieval import merge_chunks, query_kb_by_query
 from verity.schemas import LibrarianOutput, TicketState
 
 
@@ -40,7 +40,8 @@ def run_librarian(state: TicketState) -> dict[str, Any]:
         )
 
     print(f"[Librarian] Queries: {output.queries}")
-    chunks = query_kb(output.queries)
+    by_query = query_kb_by_query(output.queries)
+    chunks = merge_chunks(by_query)
     print(f"[Librarian] Retrieved {len(chunks)} chunks")
 
     ms = (time.monotonic() - start) * 1000
@@ -48,6 +49,7 @@ def run_librarian(state: TicketState) -> dict[str, Any]:
 
     return {
         "retrieved_chunks": [c.model_dump() for c in chunks],
+        "retrieval_by_query": [r.model_dump() for r in by_query],
         "agent_timings": {**state.agent_timings, "librarian": round(ms, 1)},
         "agent_tokens": {**state.agent_tokens, "librarian": tokens},
         "total_tokens": state.total_tokens + tokens,
