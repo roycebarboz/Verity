@@ -33,7 +33,6 @@ OVERLAP_TOKENS = 75
 EMBED_BATCH_SIZE = 100
 
 _enc = tiktoken.get_encoding("cl100k_base")
-_openai = OpenAI()
 
 
 # ---------------------------------------------------------------------------
@@ -50,23 +49,28 @@ def _chunk_by_heading(content: str) -> list[tuple[str, int]]:
     current_heading = ""
     current_lines: list[str] = []
 
-    def _flush(heading: str, lines: list[str], idx: int) -> None:
+    def _flush(heading: str, lines: list[str]) -> None:
         body = "\n".join(lines).strip()
-        if body:
-            text = f"{heading}\n\n{body}" if heading else body
-            chunks.append((text, idx))
+        if not body:
+            return
+        text = f"{heading}\n\n{body}" if heading else body
+        if _count_tokens(text) <= CHUNK_TOKENS:
+            chunks.append((text, len(chunks)))
+            return
+        # Oversized section: split the body, repeating the heading on each piece.
+        for piece, _ in _chunk_fixed(body):
+            piece = piece.strip()
+            chunks.append((f"{heading}\n\n{piece}" if heading else piece, len(chunks)))
 
-    idx = 0
     for line in content.splitlines():
         if line.startswith("## "):
-            _flush(current_heading, current_lines, idx)
-            idx = len(chunks)
+            _flush(current_heading, current_lines)
             current_heading = line[3:].strip()
             current_lines = []
         else:
             current_lines.append(line)
 
-    _flush(current_heading, current_lines, idx)
+    _flush(current_heading, current_lines)
     return chunks
 
 
@@ -108,7 +112,7 @@ def _doc_type(name: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _embed_batch(texts: list[str]) -> list[list[float]]:
-    resp = _openai.embeddings.create(model=EMBED_MODEL, input=texts)
+    resp = OpenAI().embeddings.create(model=EMBED_MODEL, input=texts)
     return [item.embedding for item in resp.data]
 
 
