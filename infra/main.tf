@@ -286,6 +286,7 @@ resource "aws_ecs_task_definition" "app" {
     environment = [
       { name = "AWS_REGION",        value = var.aws_region },
       { name = "DYNAMODB_TABLE",    value = aws_dynamodb_table.audit.name },
+      { name = "RERANKER_MODE",     value = "none" },
       { name = "CHROMA_DIR",        value = "/app/data/chroma" },
       { name = "S3_CHROMA_BUCKET",  value = "verity-chroma-index" },
       { name = "DD_LLMOBS_ENABLED", value = "1" },

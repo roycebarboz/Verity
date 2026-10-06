@@ -8,10 +8,11 @@ from pathlib import Path
 import chromadb
 
 from verity.llm import EMBED_MODEL, get_client
+from verity.reranker import COSINE_DEPTH, RERANK_DEPTH, Reranker, get_reranker
 from verity.schemas import QueryRetrieval, RetrievedChunk
 
 COLLECTION_NAME = "verity_kb"
-TOP_K = 5
+TOP_K = 5  # final Chunks after Fair merge
 
 
 def _download_from_s3(chroma_dir: str) -> None:
@@ -79,33 +80,40 @@ def fair_merge(by_query: list[QueryRetrieval], top_k: int = TOP_K) -> list[Retri
 
 
 def query_kb(queries: list[str], top_k: int = TOP_K) -> list[RetrievedChunk]:
-    """Embed queries, query Chroma, deduplicate by source+chunk, return top_k."""
-    return fair_merge(query_kb_by_query(queries, top_k), top_k)
+    """Embed queries, query Chroma, rank each query's candidates, Fair merge to top_k."""
+    return fair_merge(query_kb_by_query(queries), top_k)
 
 
-def query_kb_by_query(queries: list[str], top_k: int = TOP_K) -> list[QueryRetrieval]:
-    """Return the top_k chunks for each query separately (no merge, no dedupe)."""
+def query_kb_by_query(queries: list[str], reranker: Reranker | None = None) -> list[QueryRetrieval]:
+    """Return each query's ranked candidates (no merge).
+
+    With a reranker (default: the configured one) each query fetches 20 candidates and
+    ranks them by Rerank score against its own query; otherwise 5, ranked by cosine.
+    """
+    if reranker is None:
+        reranker = get_reranker()
+    depth = RERANK_DEPTH if reranker else COSINE_DEPTH
     collection = _get_collection()
     results = collection.query(
         query_embeddings=_embed(queries),
-        n_results=top_k,
+        n_results=depth,
         include=["documents", "metadatas", "distances"],
     )
-    return [
-        QueryRetrieval(
-            query=query,
-            chunks=[
-                RetrievedChunk(
-                    content=doc,
-                    source=meta["source"],
-                    doc_title=meta["doc_title"],
-                    chunk_index=meta["chunk_index"],
-                    score=round(1.0 - float(dist), 4),
-                )
-                for doc, meta, dist in zip(docs, metas, dists)
-            ],
-        )
-        for query, docs, metas, dists in zip(
-            queries, results["documents"], results["metadatas"], results["distances"]
-        )
-    ]
+    retrievals = []
+    for query, docs, metas, dists in zip(
+        queries, results["documents"], results["metadatas"], results["distances"]
+    ):
+        chunks = [
+            RetrievedChunk(
+                content=doc,
+                source=meta["source"],
+                doc_title=meta["doc_title"],
+                chunk_index=meta["chunk_index"],
+                score=round(1.0 - float(dist), 4),
+            )
+            for doc, meta, dist in zip(docs, metas, dists)
+        ]
+        if reranker:
+            chunks = reranker.rerank(query, chunks)
+        retrievals.append(QueryRetrieval(query=query, chunks=chunks))
+    return retrievals

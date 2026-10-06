@@ -100,3 +100,8 @@ def test_complexity_accuracy_ignores_unscored_tickets() -> None:
 
     assert run_eval.complexity_accuracy(scores) == 0.5
     assert run_eval.complexity_accuracy([{"complexity_correct": None}]) is None
+
+
+def test_reranker_mode_is_taken_from_the_server_responses() -> None:
+    assert run_eval.reranker_mode_of([{"final_action": "send"}, {"reranker_mode": "none"}]) == "none"
+    assert run_eval.reranker_mode_of([]) is None

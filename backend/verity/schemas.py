@@ -138,6 +138,7 @@ class PipelineMetrics(BaseModel):
 
 class TriageResponse(BaseModel):
     ticket_id: str
+    reranker_mode: Literal["qwen", "none"]
     dd_trace_id: Optional[str] = None
     pipeline: dict[str, AgentStepResult]
     final_action: Literal["send", "escalate", "request_info"]

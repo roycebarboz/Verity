@@ -25,6 +25,8 @@ if _env.exists():
 async def lifespan(_app: FastAPI):
     from verity.observability import init_llmobs
     init_llmobs()
+    from verity.reranker import check_reranker_startup
+    check_reranker_startup()
     yield
 
 
@@ -121,7 +123,10 @@ def _build_response(state: Any, total_latency_ms: float, cost_usd: float) -> dic
             attempt=state.draft_attempts if name in ("drafter", "verifier") else 1,
         )
 
+    from verity.reranker import get_reranker_mode
+
     return TriageResponse(
+        reranker_mode=get_reranker_mode(),
         ticket_id=state.ticket_id,
         dd_trace_id=state.dd_trace_id,
         pipeline={name: step(name) for name in _AGENT_MODELS if name in state.agent_timings},
@@ -187,6 +192,7 @@ async def triage(request: TicketRequest) -> StreamingResponse:
         # even if audit/response-building fails. The audit module already swallows
         # its own errors, but _build_response could still raise on malformed state.
         total_latency_ms = (time.monotonic() - start) * 1000
+        from verity.reranker import get_reranker_mode
         try:
             cost_usd = _estimate_cost(last_state.agent_tokens, _AGENT_MODELS)
             write_audit_record(last_state, total_latency_ms, cost_usd)
@@ -201,6 +207,7 @@ async def triage(request: TicketRequest) -> StreamingResponse:
                 "final_action": "escalate",
                 "final_response": f"[System error — escalated] {exc}",
                 "citations": [],
+                "reranker_mode": get_reranker_mode(),
                 "metrics": {
                     "total_latency_ms": round(total_latency_ms, 1),
                     "total_tokens": last_state.total_tokens,

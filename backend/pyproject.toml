@@ -21,6 +21,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+rerank = [
+    "torch>=2.3",
+    "transformers>=4.51",
+]
 dev = [
     "ruff>=0.5",
     "pytest>=8.0",

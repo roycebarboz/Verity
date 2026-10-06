@@ -66,6 +66,11 @@ def expected_complexity(expected_chunks: list[str]) -> str | None:
     return "complex" if len(set(expected_chunks)) >= 2 else "simple"
 
 
+def reranker_mode_of(results: list[dict]) -> str | None:
+    """The reranker mode the server reported, from the first response that carries one."""
+    return next((r["reranker_mode"] for r in results if r.get("reranker_mode")), None)
+
+
 def complexity_accuracy(scores: list[dict]) -> float | None:
     """Share of scored tickets where the Bouncer's complexity matched the derived label."""
     scored = [s["complexity_correct"] for s in scores if s.get("complexity_correct") is not None]
@@ -193,6 +198,7 @@ def main() -> None:
     metrics = {
         "run_timestamp": datetime.now(timezone.utc).isoformat(),
         "triage_url": TRIAGE_URL,
+        "reranker_mode": reranker_mode_of([r["result"] for r in raw_results]),
         "total_tickets": total,
         "errors": errors,
         "pipeline_pass_rate": round(action_correct / total, 3),
