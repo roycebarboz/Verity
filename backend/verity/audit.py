@@ -63,6 +63,7 @@ def _build_record(
         "bouncer": {
             "category": state.category,
             "severity": state.severity,
+            "complexity": state.complexity,
             "injection_detected": state.injection_detected,
         },
         "retriever": {

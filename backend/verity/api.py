@@ -85,7 +85,7 @@ _AGENT_MODELS = {
 }
 
 _AGENT_OUTPUTS: dict[str, list[str]] = {
-    "bouncer": ["category", "severity", "injection_detected"],
+    "bouncer": ["category", "severity", "complexity", "injection_detected"],
     "librarian": ["retrieved_chunks"],
     "drafter": ["draft_response", "draft_attempts", "draft_history"],
     "verifier": ["verifier_passed", "verifier_failure_reasons", "pii_detected", "citation_coverage"],

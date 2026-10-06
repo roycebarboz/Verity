@@ -27,17 +27,37 @@ class QueryRetrieval(BaseModel):
     chunks: list[RetrievedChunk]
 
 
+Complexity = Literal["simple", "complex"]
+
 # --- Structured outputs for each agent (used with OpenAI JSON mode) ---
 
 class BouncerOutput(BaseModel):
     category: str
     severity: Literal["low", "medium", "high"]
+    complexity: Complexity
     injection_detected: bool
     injection_reasoning: Optional[str] = None
 
 
 class LibrarianOutput(BaseModel):
     queries: list[str] = Field(..., min_length=1, max_length=3)
+
+
+class SimpleLibrarianOutput(LibrarianOutput):
+    """A Simple ticket gets exactly one Retrieval query."""
+
+    queries: list[str] = Field(..., min_length=1, max_length=1)
+
+
+class ComplexLibrarianOutput(LibrarianOutput):
+    """A Complex ticket gets two or three Sub-queries."""
+
+    queries: list[str] = Field(..., min_length=2, max_length=3)
+
+
+def librarian_output_for(complexity: Complexity | None) -> type[LibrarianOutput]:
+    """Schema enforcing query count per complexity; a wrong count is a parse failure."""
+    return ComplexLibrarianOutput if complexity == "complex" else SimpleLibrarianOutput
 
 
 class DrafterOutput(BaseModel):
@@ -69,6 +89,7 @@ class TicketState(BaseModel):
     # Bouncer outputs
     category: Optional[str] = None
     severity: Optional[Literal["low", "medium", "high"]] = None
+    complexity: Optional[Complexity] = None  # unset on the regex injection fast path
     injection_detected: Optional[bool] = None
 
     # Librarian outputs

@@ -39,6 +39,7 @@ function BouncerOutput({ output }: { output: Record<string, unknown> }) {
   const json = JSON.stringify({
     category: output.category,
     severity: output.severity,
+    complexity: output.complexity,
     injection_detected: output.injection_detected,
   })
   return (

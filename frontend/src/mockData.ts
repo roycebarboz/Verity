@@ -9,7 +9,7 @@ export const MOCK_RESULT: PipelineDoneEvent = {
       latency_ms: 2954,
       tokens: 358,
       attempt: 1,
-      output: { category: 'billing', severity: 'medium', injection_detected: false },
+      output: { category: 'billing', severity: 'medium', complexity: 'simple', injection_detected: false },
     },
     librarian: {
       model: 'gpt-4.1-nano',

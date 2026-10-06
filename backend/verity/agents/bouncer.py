@@ -7,7 +7,7 @@ from typing import Any
 from verity.guardrails import regex_injection_detected
 from verity.llm import BOUNCER_MODEL, parse_json_with_retry
 from verity.observability import annotate_span, llm_span
-from verity.prompts.bouncer_v1 import SYSTEM, VERSION
+from verity.prompts.bouncer_v2 import SYSTEM, VERSION
 from verity.schemas import BouncerOutput, TicketState
 
 
@@ -53,6 +53,7 @@ def run_bouncer(state: TicketState) -> dict[str, Any]:
     return {
         "category": output.category,
         "severity": output.severity,
+        "complexity": output.complexity,
         "injection_detected": output.injection_detected,
         "dd_trace_id": dd_trace_id,
         "agent_timings": {**state.agent_timings, "bouncer": round(ms, 1)},

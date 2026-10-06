@@ -6,9 +6,9 @@ from typing import Any
 
 from verity.llm import LIBRARIAN_MODEL, parse_json_with_retry
 from verity.observability import annotate_span, llm_span
-from verity.prompts.librarian_v1 import SYSTEM, VERSION
+from verity.prompts.librarian_v2 import SYSTEM, VERSION
 from verity.retrieval import merge_chunks, query_kb_by_query
-from verity.schemas import LibrarianOutput, TicketState
+from verity.schemas import TicketState, librarian_output_for
 
 
 def run_librarian(state: TicketState) -> dict[str, Any]:
@@ -17,7 +17,13 @@ def run_librarian(state: TicketState) -> dict[str, Any]:
 
     messages = [
         {"role": "system", "content": SYSTEM},
-        {"role": "user", "content": f"Support ticket:\n\n{state.raw_text}"},
+        {
+            "role": "user",
+            "content": (
+                f"Ticket complexity: {state.complexity or 'simple'}\n\n"
+                f"Support ticket:\n\n{state.raw_text}"
+            ),
+        },
     ]
 
     with llm_span(
@@ -29,7 +35,7 @@ def run_librarian(state: TicketState) -> dict[str, Any]:
         prompt_version=VERSION,
     ) as span:
         output, usage = parse_json_with_retry(
-            messages, LIBRARIAN_MODEL, LibrarianOutput, max_tokens=128
+            messages, LIBRARIAN_MODEL, librarian_output_for(state.complexity), max_tokens=128
         )
         annotate_span(
             span,

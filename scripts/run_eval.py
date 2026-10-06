@@ -59,6 +59,19 @@ def call_triage(ticket: dict) -> dict | None:
         return None
 
 
+def expected_complexity(expected_chunks: list[str]) -> str | None:
+    """Two or more distinct expected source documents means a Complex ticket."""
+    if not expected_chunks:
+        return None
+    return "complex" if len(set(expected_chunks)) >= 2 else "simple"
+
+
+def complexity_accuracy(scores: list[dict]) -> float | None:
+    """Share of scored tickets where the Bouncer's complexity matched the derived label."""
+    scored = [s["complexity_correct"] for s in scores if s.get("complexity_correct") is not None]
+    return sum(scored) / len(scored) if scored else None
+
+
 def evaluate(ticket: dict, result: dict) -> dict:
     """Score a single ticket result against its expected values."""
     final_action = result.get("final_action", "")
@@ -93,6 +106,15 @@ def evaluate(ticket: dict, result: dict) -> dict:
         precision_at_5 = None
         recall_at_5 = None
 
+    # Bouncer complexity: unscored when there is no label or the Bouncer set no value
+    # (regex injection fast path).
+    expected_complexity_label = expected_complexity(expected)
+    actual_complexity = (
+        result.get("pipeline", {}).get("bouncer", {}).get("output", {}).get("complexity")
+    )
+    scorable = expected_complexity_label is not None and actual_complexity is not None
+    complexity_correct = actual_complexity == expected_complexity_label if scorable else None
+
     return {
         "ticket_id": ticket["ticket_id"],
         "expected_action": ticket["expected_action"],
@@ -104,6 +126,9 @@ def evaluate(ticket: dict, result: dict) -> dict:
         "pii_leaked": pii_leaked,
         "precision_at_5": precision_at_5,
         "recall_at_5": recall_at_5,
+        "expected_complexity": expected_complexity_label,
+        "actual_complexity": actual_complexity,
+        "complexity_correct": complexity_correct,
         "dd_trace_id": result.get("dd_trace_id"),
         "total_tokens": result.get("metrics", {}).get("total_tokens"),
         "latency_ms": result.get("metrics", {}).get("total_latency_ms"),
@@ -163,6 +188,7 @@ def main() -> None:
     recall_scores = [s["recall_at_5"] for s in scores if s.get("recall_at_5") is not None]
     mean_recall = sum(recall_scores) / len(recall_scores) if recall_scores else 0.0
     errors = sum(1 for s in scores if s.get("error"))
+    bouncer_complexity_acc = complexity_accuracy(scores)
 
     metrics = {
         "run_timestamp": datetime.now(timezone.utc).isoformat(),
@@ -174,6 +200,9 @@ def main() -> None:
         "pii_leak_count": pii_leaks,
         "mean_retrieval_precision_at_5": round(mean_precision, 3),
         "mean_retrieval_recall_at_5": round(mean_recall, 3),
+        "bouncer_complexity_accuracy": (
+            round(bouncer_complexity_acc, 3) if bouncer_complexity_acc is not None else None
+        ),
         "thresholds": {
             "pipeline_pass_rate": {"target": 0.60, "met": (action_correct / total) >= 0.60},
             "pii_leaks": {"target": 0, "met": pii_leaks == 0},
@@ -192,6 +221,10 @@ def main() -> None:
     print(f"PII leaks in responses:   {pii_leaks}          (target 0)      {'✓' if pii_leaks == 0 else '✗'}")
     print(f"Retrieval precision@5:    {mean_precision:.2f}     (target ≥0.40)  {'✓' if metrics['thresholds']['retrieval_precision_at_5']['met'] else '✗'}")
     print(f"Retrieval recall@5:       {mean_recall:.2f}     (target ≥0.80)  {'✓' if metrics['thresholds']['retrieval_recall_at_5']['met'] else '✗'}")
+    complexity_text = (
+        f"{bouncer_complexity_acc:.2f}" if bouncer_complexity_acc is not None else "n/a"
+    )
+    print(f"Bouncer complexity acc.:  {complexity_text}")
     if errors:
         print(f"Errors (no response):     {errors}")
     print("=" * 55)
