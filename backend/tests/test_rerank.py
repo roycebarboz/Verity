@@ -1,12 +1,12 @@
 """Rerank step: candidate depth, per-query ranking, startup check and reported mode."""
 
 import json
-from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
 from verity import reranker, retrieval
+from verity.llm import LLMUsage
 
 
 class FakeCollection:
@@ -100,7 +100,7 @@ def test_librarian_merges_reranked_candidates_into_five_rerank_chunks(
         "parse_json_with_retry",
         lambda *a, **k: (
             SimpleLibrarianOutput(queries=["a"]),
-            SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            LLMUsage(1, 1, 2, 0.001),
         ),
     )
 

@@ -1,9 +1,9 @@
 """Drafter retry input, tested through run_drafter with only the LLM call faked."""
 
-from types import SimpleNamespace
 
 import pytest
 
+from verity.llm import LLMUsage
 from verity.schemas import DrafterOutput, TicketState
 
 
@@ -15,7 +15,7 @@ def _run(monkeypatch: pytest.MonkeyPatch, state: TicketState) -> str:
 
     def fake_llm(messages, model, schema, **kwargs):
         sent.append(messages)
-        usage = SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2)
+        usage = LLMUsage(1, 1, 2, 0.001)
         return DrafterOutput(response="new draft", needs_clarification=False), usage
 
     monkeypatch.setattr(drafter, "parse_json_with_retry", fake_llm)

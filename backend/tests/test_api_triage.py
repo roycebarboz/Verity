@@ -56,3 +56,33 @@ def test_pipeline_done_includes_five_chunks_per_query(monkeypatch: pytest.Monkey
     assert [q["query"] for q in by_query] == ["q0", "q1", "q2"]
     assert sum(len(q["chunks"]) for q in by_query) == 15
     assert len(done["citations"]) == 1  # citations stay the merged top-5
+
+
+def test_estimated_cost_is_sum_of_per_agent_costs(monkeypatch: pytest.MonkeyPatch) -> None:
+    import verity.audit
+    import verity.graph
+    from verity.api import app
+
+    class CostPipeline:
+        async def astream(self, initial: dict):
+            yield {
+                "bouncer": {
+                    "agent_timings": {"bouncer": 1.0},
+                    "agent_costs": {"bouncer": 0.000123},
+                }
+            }
+            yield {
+                "drafter": {
+                    "agent_timings": {"bouncer": 1.0, "drafter": 1.0},
+                    "agent_costs": {"bouncer": 0.000123, "drafter": 0.000456},
+                }
+            }
+
+    monkeypatch.setattr(verity.graph, "pipeline", CostPipeline())
+    monkeypatch.setattr(verity.audit, "write_audit_record", lambda *a, **k: None)
+
+    resp = TestClient(app).post(
+        "/triage", json={"ticket_text": "help", "customer_id": "c", "channel": "web"}
+    )
+
+    assert _pipeline_done(resp.text)["metrics"]["estimated_cost_usd"] == pytest.approx(0.000579)

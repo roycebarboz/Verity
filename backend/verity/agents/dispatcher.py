@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from verity.llm import DISPATCHER_MODEL, parse_json_with_retry
+from verity.llm import agent_model, parse_json_with_retry, provider_for
 from verity.observability import annotate_span, llm_span
 from verity.prompts.dispatcher_v1 import SYSTEM, VERSION
 from verity.schemas import DispatcherOutput, TicketState
@@ -46,16 +46,17 @@ def run_dispatcher(state: TicketState) -> dict[str, Any]:
         {"role": "user", "content": user_content},
     ]
 
+    model = agent_model("dispatcher")
     with llm_span(
         "dispatcher",
-        "openai",
-        DISPATCHER_MODEL,
+        provider_for(model),
+        model,
         state.ticket_id,
         severity=state.severity,
         prompt_version=VERSION,
     ) as span:
         output, usage = parse_json_with_retry(
-            messages, DISPATCHER_MODEL, DispatcherOutput, max_tokens=512
+            messages, model, DispatcherOutput, max_tokens=512
         )
         annotate_span(
             span,
@@ -67,12 +68,17 @@ def run_dispatcher(state: TicketState) -> dict[str, Any]:
 
     ms = (time.monotonic() - start) * 1000
     tokens = usage.total_tokens if usage else 0
+    cost = usage.cost_usd if usage else 0.0
 
     return {
         "final_action": output.action,
         "final_response": output.final_response,
         "agent_timings": {**state.agent_timings, "dispatcher": round(ms, 1)},
         "agent_tokens": {**state.agent_tokens, "dispatcher": tokens},
+        "agent_costs": {
+            **state.agent_costs,
+            "dispatcher": state.agent_costs.get("dispatcher", 0.0) + cost,  # summed across retries
+        },
         "total_tokens": state.total_tokens + tokens,
     }
 

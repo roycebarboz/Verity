@@ -120,6 +120,7 @@ class TicketState(BaseModel):
     # Operational metrics — populated by agents, used to build API response
     agent_timings: dict[str, float] = Field(default_factory=dict)
     agent_tokens: dict[str, int] = Field(default_factory=dict)
+    agent_costs: dict[str, float] = Field(default_factory=dict)  # USD, from LiteLLM per call
 
 
 class AgentStepResult(BaseModel):

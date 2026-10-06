@@ -10,8 +10,8 @@ from typing import Any, Literal
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -56,35 +56,16 @@ class TicketRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Cost estimation (rough mid-2026 pricing; update if OpenAI changes rates)
+# Cost estimation — the sum of each LLM call's cost as priced by LiteLLM
 # ---------------------------------------------------------------------------
 
-_COST_PER_1K: dict[str, float] = {
-    "gpt-4.1-nano": 0.0002,
-    "gpt-4.1-mini": 0.0008,
-    "gpt-5-mini": 0.0015,
-}
-
-
-def _estimate_cost(agent_tokens: dict[str, int], agent_models: dict[str, str]) -> float:
-    total = 0.0
-    for agent, tokens in agent_tokens.items():
-        model = agent_models.get(agent, "gpt-4.1-nano")
-        total += tokens * _COST_PER_1K.get(model, 0.001) / 1000
-    return round(total, 6)
+def _estimate_cost(agent_costs: dict[str, float]) -> float:
+    return round(sum(agent_costs.values()), 6)
 
 
 # ---------------------------------------------------------------------------
 # Build API response from final TicketState
 # ---------------------------------------------------------------------------
-
-_AGENT_MODELS = {
-    "bouncer": "gpt-4.1-nano",
-    "librarian": "gpt-4.1-nano",
-    "drafter": "gpt-4.1-mini",
-    "verifier": "gpt-5-mini",
-    "dispatcher": "gpt-4.1-nano",
-}
 
 _AGENT_OUTPUTS: dict[str, list[str]] = {
     "bouncer": ["category", "severity", "complexity", "injection_detected"],
@@ -97,11 +78,12 @@ _AGENT_OUTPUTS: dict[str, list[str]] = {
 
 def _step_from_state(node_name: str, state: Any) -> Any:
     """Build an AgentStepResult from the TicketState after a node completes."""
+    from verity.llm import agent_model
     from verity.schemas import AgentStepResult
     state_dict = state.model_dump()
     output = {k: state_dict.get(k) for k in _AGENT_OUTPUTS[node_name]}
     return AgentStepResult(
-        model=_AGENT_MODELS[node_name],
+        model=agent_model(node_name),
         latency_ms=state.agent_timings.get(node_name, 0.0),
         tokens=state.agent_tokens.get(node_name, 0),
         output=output,
@@ -110,13 +92,14 @@ def _step_from_state(node_name: str, state: Any) -> Any:
 
 
 def _build_response(state: Any, total_latency_ms: float, cost_usd: float) -> dict[str, Any]:
+    from verity.llm import agent_model, agent_names
     from verity.schemas import AgentStepResult, PipelineMetrics, TriageResponse
 
     def step(name: str) -> AgentStepResult:
         state_dict = state.model_dump()
         output = {k: state_dict.get(k) for k in _AGENT_OUTPUTS[name]}
         return AgentStepResult(
-            model=_AGENT_MODELS[name],
+            model=agent_model(name),
             latency_ms=state.agent_timings.get(name, 0.0),
             tokens=state.agent_tokens.get(name, 0),
             output=output,
@@ -129,7 +112,7 @@ def _build_response(state: Any, total_latency_ms: float, cost_usd: float) -> dic
         reranker_mode=get_reranker_mode(),
         ticket_id=state.ticket_id,
         dd_trace_id=state.dd_trace_id,
-        pipeline={name: step(name) for name in _AGENT_MODELS if name in state.agent_timings},
+        pipeline={name: step(name) for name in agent_names() if name in state.agent_timings},
         final_action=state.final_action or "escalate",
         final_response=state.final_response or "",
         citations=state.retrieved_chunks,
@@ -194,7 +177,7 @@ async def triage(request: TicketRequest) -> StreamingResponse:
         total_latency_ms = (time.monotonic() - start) * 1000
         from verity.reranker import get_reranker_mode
         try:
-            cost_usd = _estimate_cost(last_state.agent_tokens, _AGENT_MODELS)
+            cost_usd = _estimate_cost(last_state.agent_costs)
             write_audit_record(last_state, total_latency_ms, cost_usd)
             done_payload = _build_response(last_state, total_latency_ms, cost_usd)
         except Exception as exc:

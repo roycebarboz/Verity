@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from verity.llm import DRAFTER_MODEL, parse_json_with_retry
+from verity.llm import agent_model, parse_json_with_retry, provider_for
 from verity.observability import annotate_span, llm_span, submit_citation_score
 from verity.prompts.drafter_v1 import SYSTEM, VERSION
 from verity.schemas import DrafterOutput, TicketState
@@ -42,17 +42,18 @@ def run_drafter(state: TicketState) -> dict[str, Any]:
         {"role": "user", "content": user_content},
     ]
 
+    model = agent_model("drafter")
     with llm_span(
         "drafter",
-        "openai",
-        DRAFTER_MODEL,
+        provider_for(model),
+        model,
         state.ticket_id,
         attempt=attempt,
         severity=state.severity,
         prompt_version=VERSION,
     ) as span:
         output, usage = parse_json_with_retry(
-            messages, DRAFTER_MODEL, DrafterOutput, max_tokens=512
+            messages, model, DrafterOutput, max_tokens=512
         )
         # Pass the plain response string (not JSON) as output so Datadog's
         # built-in faithfulness + answer relevancy evals can parse it correctly
@@ -70,6 +71,7 @@ def run_drafter(state: TicketState) -> dict[str, Any]:
 
     ms = (time.monotonic() - start) * 1000
     tokens = usage.total_tokens if usage else 0
+    cost = usage.cost_usd if usage else 0.0
 
     return {
         "draft_response": output.response,
@@ -78,5 +80,9 @@ def run_drafter(state: TicketState) -> dict[str, Any]:
         "draft_needs_clarification": output.needs_clarification,
         "agent_timings": {**state.agent_timings, "drafter": round(ms, 1)},
         "agent_tokens": {**state.agent_tokens, "drafter": tokens},
+        "agent_costs": {
+            **state.agent_costs,
+            "drafter": state.agent_costs.get("drafter", 0.0) + cost,  # summed across retries
+        },
         "total_tokens": state.total_tokens + tokens,
     }

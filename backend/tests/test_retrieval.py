@@ -3,6 +3,7 @@
 import pytest
 
 from verity import retrieval
+from verity.llm import LLMUsage
 
 
 class FakeCollection:
@@ -40,7 +41,6 @@ def test_query_kb_by_query_returns_five_chunks_for_each_query() -> None:
 def test_librarian_node_records_per_query_chunks_alongside_top_five(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from types import SimpleNamespace
 
     from verity.agents import librarian
     from verity.schemas import LibrarianOutput, TicketState
@@ -50,7 +50,7 @@ def test_librarian_node_records_per_query_chunks_alongside_top_five(
         "parse_json_with_retry",
         lambda *a, **k: (
             LibrarianOutput(queries=["a", "b", "c"]),
-            SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            LLMUsage(1, 1, 2, 0.001),
         ),
     )
     state = TicketState(raw_text="help", customer_id="c", channel="web")
@@ -72,7 +72,6 @@ def _chunk(source: str, idx: int = 0, score: float = 0.5):
 
 
 def _run_librarian_with(monkeypatch: pytest.MonkeyPatch, by_query):
-    from types import SimpleNamespace
 
     from verity.agents import librarian
     from verity.schemas import LibrarianOutput, TicketState
@@ -84,7 +83,7 @@ def _run_librarian_with(monkeypatch: pytest.MonkeyPatch, by_query):
         "parse_json_with_retry",
         lambda *a, **k: (
             LibrarianOutput(queries=queries),
-            SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            LLMUsage(1, 1, 2, 0.001),
         ),
     )
     state = TicketState(raw_text="help", customer_id="c", channel="web")

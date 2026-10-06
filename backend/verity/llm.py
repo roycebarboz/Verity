@@ -1,51 +1,59 @@
-"""OpenAI client singleton with exponential-backoff retry on 429/5xx."""
+"""Chat calls through the LiteLLM SDK (see docs/adr/0002). Chat model names are defined here only."""
 from __future__ import annotations
 
+import logging
 import os
-import random
-import time
-from typing import Callable, TypeVar
+from dataclasses import dataclass
 
-from openai import APIStatusError, OpenAI, RateLimitError
+import litellm
 
-# Model names as specified in PRD Section 7.1
-BOUNCER_MODEL = "gpt-4.1-nano"
-LIBRARIAN_MODEL = "gpt-4.1-nano"
-DRAFTER_MODEL = "gpt-4.1-mini"
-VERIFIER_MODEL = "gpt-5-mini"
-DISPATCHER_MODEL = "gpt-4.1-nano"
+logger = logging.getLogger(__name__)
+
+# Per-agent model names: today's models by default, overridable via e.g. DRAFTER_MODEL.
+_DEFAULT_AGENT_MODELS = {
+    "bouncer": "gpt-4.1-nano",
+    "librarian": "gpt-4.1-nano",
+    "drafter": "gpt-4.1-mini",
+    "verifier": "gpt-5-mini",
+    "dispatcher": "gpt-4.1-nano",
+}
 EMBED_MODEL = "text-embedding-3-small"
 
-_client: OpenAI | None = None
-
-T = TypeVar("T")
+LLM_NUM_RETRIES = 3
 
 
-def get_client() -> OpenAI:
-    global _client
-    if _client is None:
-        _client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    return _client
+def agent_model(agent: str) -> str:
+    return os.environ.get(f"{agent.upper()}_MODEL") or _DEFAULT_AGENT_MODELS[agent]
 
 
-def call_with_retry(fn: Callable[[], T], max_attempts: int = 3) -> T:
-    """Retry fn on 429 or 5xx with exponential backoff + jitter."""
-    for attempt in range(max_attempts):
+def agent_names() -> list[str]:
+    return list(_DEFAULT_AGENT_MODELS)
+
+
+def provider_for(model: str) -> str:
+    """Provider tag for a model (e.g. "openai"), resolved by LiteLLM."""
+    try:
+        return litellm.get_llm_provider(model)[1]
+    except Exception:
+        return "unknown"
+
+
+@dataclass
+class LLMUsage:
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    cost_usd: float = 0.0
+
+    def add(self, resp: object) -> None:
+        usage = getattr(resp, "usage", None)
+        self.prompt_tokens += getattr(usage, "prompt_tokens", 0) or 0
+        self.completion_tokens += getattr(usage, "completion_tokens", 0) or 0
+        self.total_tokens += getattr(usage, "total_tokens", 0) or 0
         try:
-            return fn()
-        except RateLimitError:
-            if attempt == max_attempts - 1:
-                raise
-        except APIStatusError as e:
-            if e.status_code < 500 or attempt == max_attempts - 1:
-                raise
-        wait = (2**attempt) + random.uniform(0, 1)
-        time.sleep(wait)
-    raise RuntimeError("unreachable")
-
-
-# Reasoning models: require max_completion_tokens and don't support json_object mode
-_REASONING_MODELS = {"gpt-5-mini", "o1", "o1-mini", "o3", "o3-mini", "o4-mini"}
+            self.cost_usd += litellm.completion_cost(completion_response=resp) or 0.0
+        except Exception as exc:  # model missing from LiteLLM's price map — don't fail the call
+            logger.warning("LLM cost unavailable, counting as 0: %s", exc)
 
 
 def parse_json_with_retry(
@@ -54,39 +62,36 @@ def parse_json_with_retry(
     schema_cls: type,
     max_parse_attempts: int = 3,
     max_tokens: int = 512,
-) -> tuple[object, object]:
-    """Call OpenAI in JSON mode, validate against schema_cls, retry on parse failure.
+) -> tuple[object, LLMUsage]:
+    """Call the model, validate JSON against schema_cls, retry on parse failure.
 
-    Returns (parsed_object, usage).
+    Transport retries (429/5xx) are LiteLLM's. Returns (parsed_object, usage summed over attempts).
     """
-    client = get_client()
     msgs = list(messages)
+    usage = LLMUsage()
 
-    is_reasoning = model in _REASONING_MODELS
-    # Reasoning models split budget between internal thinking and visible output —
-    # multiply by 4 so there's room for both reasoning tokens and the JSON response.
-    effective_tokens = max_tokens * 4 if is_reasoning else max_tokens
-    token_kwarg = {"max_completion_tokens": effective_tokens} if is_reasoning else {"max_tokens": max_tokens}
-    # Reasoning models don't support response_format=json_object — prompt instructs JSON instead
-    format_kwarg = {} if is_reasoning else {"response_format": {"type": "json_object"}}
+    kwargs: dict = {}
+    if litellm.supports_reasoning(model):
+        # Reasoning models split budget between thinking and visible output — leave room for both.
+        kwargs["max_completion_tokens"] = max_tokens * 4
+    else:
+        kwargs["max_tokens"] = max_tokens
+    if "response_format" in (litellm.get_supported_openai_params(model) or []):
+        kwargs["response_format"] = {"type": "json_object"}
 
     for attempt in range(max_parse_attempts):
-        resp = call_with_retry(
-            lambda: client.chat.completions.create(
-                model=model,
-                messages=msgs,
-                **token_kwarg,
-                **format_kwarg,
-            )
+        resp = litellm.completion(
+            model=model, messages=msgs, num_retries=LLM_NUM_RETRIES, **kwargs
         )
+        usage.add(resp)
         content = resp.choices[0].message.content or ""
         try:
-            parsed = schema_cls.model_validate_json(content)
-            return parsed, resp.usage
+            return schema_cls.model_validate_json(content), usage
         except Exception as exc:
             if attempt == max_parse_attempts - 1:
-                raise ValueError(f"Schema parse failed after {max_parse_attempts} attempts: {exc}") from exc
-            # Append error and ask model to fix
+                raise ValueError(
+                    f"Schema parse failed after {max_parse_attempts} attempts: {exc}"
+                ) from exc
             msgs = msgs + [
                 {"role": "assistant", "content": content},
                 {"role": "user", "content": f"Invalid JSON. Error: {exc}. Return valid JSON only."},

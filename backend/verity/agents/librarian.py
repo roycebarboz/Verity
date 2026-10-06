@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from verity.llm import LIBRARIAN_MODEL, parse_json_with_retry
+from verity.llm import agent_model, parse_json_with_retry, provider_for
 from verity.observability import annotate_span, llm_span
 from verity.prompts.librarian_v2 import SYSTEM, VERSION
 from verity.retrieval import fair_merge, query_kb_by_query
@@ -26,16 +26,17 @@ def run_librarian(state: TicketState) -> dict[str, Any]:
         },
     ]
 
+    model = agent_model("librarian")
     with llm_span(
         "librarian",
-        "openai",
-        LIBRARIAN_MODEL,
+        provider_for(model),
+        model,
         state.ticket_id,
         severity=state.severity,
         prompt_version=VERSION,
     ) as span:
         output, usage = parse_json_with_retry(
-            messages, LIBRARIAN_MODEL, librarian_output_for(state.complexity), max_tokens=128
+            messages, model, librarian_output_for(state.complexity), max_tokens=128
         )
         annotate_span(
             span,
@@ -52,11 +53,16 @@ def run_librarian(state: TicketState) -> dict[str, Any]:
 
     ms = (time.monotonic() - start) * 1000
     tokens = usage.total_tokens if usage else 0
+    cost = usage.cost_usd if usage else 0.0
 
     return {
         "retrieved_chunks": [c.model_dump() for c in chunks],
         "retrieval_by_query": [r.model_dump() for r in by_query],
         "agent_timings": {**state.agent_timings, "librarian": round(ms, 1)},
         "agent_tokens": {**state.agent_tokens, "librarian": tokens},
+        "agent_costs": {
+            **state.agent_costs,
+            "librarian": state.agent_costs.get("librarian", 0.0) + cost,  # summed across retries
+        },
         "total_tokens": state.total_tokens + tokens,
     }

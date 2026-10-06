@@ -5,7 +5,7 @@ import time
 from typing import Any
 
 from verity.guardrails import compute_citation_coverage, detect_pii
-from verity.llm import VERIFIER_MODEL, parse_json_with_retry
+from verity.llm import agent_model, parse_json_with_retry, provider_for
 from verity.observability import annotate_span, llm_span
 from verity.prompts.verifier_v1 import SYSTEM, VERSION
 from verity.schemas import TicketState, VerifierOutput
@@ -46,17 +46,18 @@ def run_verifier(state: TicketState) -> dict[str, Any]:
         {"role": "user", "content": _build_verifier_input(state)},
     ]
 
+    model = agent_model("verifier")
     with llm_span(
         "verifier",
-        "openai",
-        VERIFIER_MODEL,
+        provider_for(model),
+        model,
         state.ticket_id,
         attempt=attempt,
         severity=state.severity,
         prompt_version=VERSION,
     ) as span:
         output, usage = parse_json_with_retry(
-            messages, VERIFIER_MODEL, VerifierOutput, max_tokens=512
+            messages, model, VerifierOutput, max_tokens=512
         )
         annotate_span(
             span,
@@ -76,6 +77,7 @@ def run_verifier(state: TicketState) -> dict[str, Any]:
 
     ms = (time.monotonic() - start) * 1000
     tokens = usage.total_tokens if usage else 0
+    cost = usage.cost_usd if usage else 0.0
 
     return {
         "verifier_passed": output.passed and not output.pii_detected,
@@ -84,5 +86,9 @@ def run_verifier(state: TicketState) -> dict[str, Any]:
         "citation_coverage": round(final_coverage, 3),
         "agent_timings": {**state.agent_timings, "verifier": round(ms, 1)},
         "agent_tokens": {**state.agent_tokens, "verifier": tokens},
+        "agent_costs": {
+            **state.agent_costs,
+            "verifier": state.agent_costs.get("verifier", 0.0) + cost,  # summed across retries
+        },
         "total_tokens": state.total_tokens + tokens,
     }

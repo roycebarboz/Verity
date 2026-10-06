@@ -5,7 +5,7 @@ import time
 from typing import Any
 
 from verity.guardrails import regex_injection_detected
-from verity.llm import BOUNCER_MODEL, parse_json_with_retry
+from verity.llm import agent_model, parse_json_with_retry, provider_for
 from verity.observability import annotate_span, llm_span
 from verity.prompts.bouncer_v2 import SYSTEM, VERSION
 from verity.schemas import BouncerOutput, TicketState
@@ -31,11 +31,12 @@ def run_bouncer(state: TicketState) -> dict[str, Any]:
         {"role": "user", "content": f"Support ticket:\n\n{state.raw_text}"},
     ]
 
+    model = agent_model("bouncer")
     with llm_span(
-        "bouncer", "openai", BOUNCER_MODEL, state.ticket_id, prompt_version=VERSION
+        "bouncer", provider_for(model), model, state.ticket_id, prompt_version=VERSION
     ) as span:
         output, usage = parse_json_with_retry(
-            messages, BOUNCER_MODEL, BouncerOutput, max_tokens=256
+            messages, model, BouncerOutput, max_tokens=256
         )
         annotate_span(
             span,
@@ -49,6 +50,7 @@ def run_bouncer(state: TicketState) -> dict[str, Any]:
 
     ms = (time.monotonic() - start) * 1000
     tokens = usage.total_tokens if usage else 0
+    cost = usage.cost_usd if usage else 0.0
 
     return {
         "category": output.category,
@@ -58,5 +60,9 @@ def run_bouncer(state: TicketState) -> dict[str, Any]:
         "dd_trace_id": dd_trace_id,
         "agent_timings": {**state.agent_timings, "bouncer": round(ms, 1)},
         "agent_tokens": {**state.agent_tokens, "bouncer": tokens},
+        "agent_costs": {
+            **state.agent_costs,
+            "bouncer": state.agent_costs.get("bouncer", 0.0) + cost,  # summed across retries
+        },
         "total_tokens": state.total_tokens + tokens,
     }

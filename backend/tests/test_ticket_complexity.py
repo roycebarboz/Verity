@@ -1,6 +1,6 @@
 """Ticket complexity: Bouncer -> state, Librarian query count, audit/API exposure.
 
-Only the LLM client (and the vector store / embedder) are faked.
+Only LiteLLM's completion call (and the vector store / embedder) are faked.
 """
 
 import json
@@ -34,7 +34,6 @@ class FakeClient:
     def __init__(self, contents: list[str]) -> None:
         self.contents = list(contents)
         self.calls = 0
-        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
     def _create(self, **kwargs):
         content = self.contents[self.calls]
@@ -53,7 +52,7 @@ def fake_retrieval(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _fake_llm(monkeypatch: pytest.MonkeyPatch, *contents: str) -> FakeClient:
     client = FakeClient(list(contents))
-    monkeypatch.setattr(llm, "get_client", lambda: client)
+    monkeypatch.setattr(llm.litellm, "completion", client._create)
     return client
 
 
