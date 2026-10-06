@@ -18,6 +18,7 @@ class RetrievedChunk(BaseModel):
     doc_title: str
     chunk_index: int
     score: float = 0.0
+    score_kind: Literal["cosine", "rerank"] = "cosine"
 
 
 class QueryRetrieval(BaseModel):

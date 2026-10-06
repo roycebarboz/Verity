@@ -52,9 +52,9 @@ export const MOCK_RESULT: PipelineDoneEvent = {
   final_response:
     'Thank you for reaching out regarding the apparent double charge on your subscription. To address billing disputes such as this, please follow the dispute process outlined in our Invoice Dispute Process documentation. Typically, credit for disputed amounts appears on your next invoice as a Billing Credit. You can initiate a refund request by navigating to Settings > Billing > Invoices in the Web Console and clicking "Request Refund" on the relevant invoice.',
   citations: [
-    { source: 'pricing_invoice_dispute.md', doc_title: 'Invoice Dispute Process', chunk_index: 0, content: '', score: 0.92 },
-    { source: 'policy_refund.md', doc_title: 'Refund Policy', chunk_index: 1, content: '', score: 0.88 },
-    { source: 'runbook_co701.md', doc_title: 'Runbook CO-701', chunk_index: 0, content: '', score: 0.75 },
+    { source: 'pricing_invoice_dispute.md', doc_title: 'Invoice Dispute Process', chunk_index: 0, content: '', score: 0.92, score_kind: 'cosine' },
+    { source: 'policy_refund.md', doc_title: 'Refund Policy', chunk_index: 1, content: '', score: 0.88, score_kind: 'cosine' },
+    { source: 'runbook_co701.md', doc_title: 'Runbook CO-701', chunk_index: 0, content: '', score: 0.75, score_kind: 'cosine' },
   ],
   metrics: {
     total_latency_ms: 32582,

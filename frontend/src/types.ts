@@ -4,6 +4,7 @@ export interface RetrievedChunk {
   doc_title: string
   chunk_index: number
   score: number
+  score_kind: 'cosine' | 'rerank'
 }
 
 export interface AgentStepResult {

@@ -1,4 +1,4 @@
-import { AgentStepResult } from '../types'
+import { AgentStepResult, RetrievedChunk } from '../types'
 
 type AgentStatus = 'pending' | 'running' | 'passed' | 'retry' | 'failed'
 
@@ -51,7 +51,7 @@ function BouncerOutput({ output }: { output: Record<string, unknown> }) {
 }
 
 function LibrarianOutput({ output }: { output: Record<string, unknown> }) {
-  const chunks = output.retrieved_chunks as unknown[] | null
+  const chunks = output.retrieved_chunks as RetrievedChunk[] | null
   return (
     <div className="mt-3 bg-surface-container-low rounded-lg p-2">
       <span className="text-[9px] uppercase text-outline font-bold mb-1 block">Structured Output</span>
@@ -64,6 +64,12 @@ function LibrarianOutput({ output }: { output: Record<string, unknown> }) {
           <span className="text-on-surface-variant">chunks_retrieved:</span>
           <span className="font-bold">{chunks?.length ?? 0}</span>
         </div>
+        {chunks?.map((c, i) => (
+          <div key={`${c.source}_${c.chunk_index}`} className="flex justify-between font-mono text-[11px]">
+            <span className="text-on-surface-variant truncate">{i + 1}. {c.source}</span>
+            <span className="font-bold">{c.score?.toFixed(3)} {c.score_kind}</span>
+          </div>
+        ))}
       </div>
     </div>
   )

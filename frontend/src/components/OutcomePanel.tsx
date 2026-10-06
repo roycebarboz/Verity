@@ -71,7 +71,7 @@ export default function OutcomePanel({ result, loading }: Props) {
                     <div
                       key={c.source}
                       className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded-full text-on-surface-variant text-body-sm hover:bg-secondary-container hover:text-on-secondary-container transition-colors cursor-help"
-                      title={c.doc_title}
+                      title={`${c.doc_title} — ${c.score.toFixed(3)} ${c.score_kind}`}
                     >
                       <span className="material-symbols-outlined text-[16px]">description</span>
                       {c.source}

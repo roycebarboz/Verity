@@ -49,25 +49,38 @@ def _embed(texts: list[str]) -> list[list[float]]:
     return [item.embedding for item in resp.data]
 
 
-def merge_chunks(by_query: list[QueryRetrieval], top_k: int = TOP_K) -> list[RetrievedChunk]:
-    """Deduplicate by source+chunk across queries, return the top_k by score."""
-    seen: set[str] = set()
-    chunks: list[RetrievedChunk] = []
-    for retrieval in by_query:
-        for chunk in retrieval.chunks:
-            uid = f"{chunk.source}_{chunk.chunk_index}"
-            if uid in seen:
-                continue
-            seen.add(uid)
-            chunks.append(chunk)
+def fair_merge(by_query: list[QueryRetrieval], top_k: int = TOP_K) -> list[RetrievedChunk]:
+    """Fair merge: take each query's #1, then each query's #2, ... until top_k (ADR 0001).
 
-    chunks.sort(key=lambda c: c.score, reverse=True)
-    return chunks[:top_k]
+    A Chunk already taken (same source and position) is skipped in favour of that
+    query's next candidate. Ties at a rank resolve in query order.
+    """
+    seen: set[tuple[str, int]] = set()
+    merged: list[RetrievedChunk] = []
+    cursors = [0] * len(by_query)
+    while len(merged) < top_k:
+        progressed = False
+        for i, retrieval in enumerate(by_query):
+            while cursors[i] < len(retrieval.chunks):
+                chunk = retrieval.chunks[cursors[i]]
+                cursors[i] += 1
+                key = (chunk.source, chunk.chunk_index)
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(chunk)
+                progressed = True
+                break
+            if len(merged) == top_k:
+                return merged
+        if not progressed:
+            break
+    return merged
 
 
 def query_kb(queries: list[str], top_k: int = TOP_K) -> list[RetrievedChunk]:
     """Embed queries, query Chroma, deduplicate by source+chunk, return top_k."""
-    return merge_chunks(query_kb_by_query(queries, top_k), top_k)
+    return fair_merge(query_kb_by_query(queries, top_k), top_k)
 
 
 def query_kb_by_query(queries: list[str], top_k: int = TOP_K) -> list[QueryRetrieval]:
