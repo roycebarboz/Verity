@@ -13,7 +13,6 @@ dependencies = [
     "fastapi>=0.111",
     "uvicorn[standard]>=0.29",
     "litellm==1.104.0",
-    "openai>=1.30",  # still used by scripts/ingest_kb.py until embeddings move to LiteLLM (ticket 06)
     "chromadb>=0.5",
     "ddtrace>=2.10",
     "python-dotenv>=1.0",

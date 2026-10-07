@@ -4,12 +4,11 @@
 Run from the repo root:
     python scripts/ingest_kb.py
 
-Reads data/kb/*.md, chunks by document type, embeds with text-embedding-3-small,
+Reads data/kb/*.md, chunks by document type, embeds with the configured embedding model (EMBED_MODEL),
 and writes the index to data/chroma/.
 """
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -19,7 +18,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 import chromadb
 import tiktoken
 from dotenv import load_dotenv
-from openai import OpenAI
+
+from verity.llm import INDEX_EMBED_MODEL_KEY, embed, embed_model  # noqa: E402
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -27,7 +27,6 @@ REPO_ROOT = Path(__file__).parent.parent
 KB_DIR = REPO_ROOT / "data" / "kb"
 CHROMA_DIR = REPO_ROOT / "data" / "chroma"
 COLLECTION_NAME = "verity_kb"
-EMBED_MODEL = "text-embedding-3-small"
 CHUNK_TOKENS = 512
 OVERLAP_TOKENS = 75
 EMBED_BATCH_SIZE = 100
@@ -112,8 +111,7 @@ def _doc_type(name: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _embed_batch(texts: list[str]) -> list[list[float]]:
-    resp = OpenAI().embeddings.create(model=EMBED_MODEL, input=texts)
-    return [item.embedding for item in resp.data]
+    return embed(texts)
 
 
 # ---------------------------------------------------------------------------
@@ -121,10 +119,6 @@ def _embed_batch(texts: list[str]) -> list[list[float]]:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Error: OPENAI_API_KEY not set", file=sys.stderr)
-        sys.exit(1)
-
     md_files = sorted(p for p in KB_DIR.glob("*.md") if p.name != "README.md")
     if not md_files:
         print(f"No markdown files found in {KB_DIR}", file=sys.stderr)
@@ -143,7 +137,7 @@ def main() -> None:
 
     collection = client.create_collection(
         COLLECTION_NAME,
-        metadata={"hnsw:space": "cosine"},
+        metadata={"hnsw:space": "cosine", INDEX_EMBED_MODEL_KEY: embed_model()},
     )
 
     ids: list[str] = []

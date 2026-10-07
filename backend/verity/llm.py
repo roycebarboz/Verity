@@ -17,13 +17,41 @@ _DEFAULT_AGENT_MODELS = {
     "verifier": "gpt-5-mini",
     "dispatcher": "gpt-4.1-nano",
 }
-EMBED_MODEL = "text-embedding-3-small"
+_DEFAULT_EMBED_MODEL = "text-embedding-3-small"
+# Chroma collection metadata key recording which embedding model built the index.
+INDEX_EMBED_MODEL_KEY = "embedding_model"
 
 LLM_NUM_RETRIES = 3
 
 
 def agent_model(agent: str) -> str:
     return os.environ.get(f"{agent.upper()}_MODEL") or _DEFAULT_AGENT_MODELS[agent]
+
+
+def embed_model() -> str:
+    """The one embedding model for ingestion and query time (override with EMBED_MODEL)."""
+    return os.environ.get("EMBED_MODEL") or _DEFAULT_EMBED_MODEL
+
+
+def embed(texts: list[str]) -> list[list[float]]:
+    resp = litellm.embedding(model=embed_model(), input=texts, num_retries=LLM_NUM_RETRIES)
+    return [item["embedding"] for item in resp.data]
+
+
+class IndexModelMismatch(RuntimeError):
+    pass
+
+
+def check_index_embed_model(index_metadata: dict | None) -> None:
+    """Refuse an index built with a different embedding model than the configured one (ADR 0002)."""
+    built_with = (index_metadata or {}).get(INDEX_EMBED_MODEL_KEY)
+    configured = embed_model()
+    if built_with != configured:
+        raise IndexModelMismatch(
+            f"The index was built with embedding model {built_with!r} but {configured!r} is "
+            "configured. Re-ingest the knowledge base (python scripts/ingest_kb.py) or set "
+            "EMBED_MODEL back to match."
+        )
 
 
 def agent_names() -> list[str]:

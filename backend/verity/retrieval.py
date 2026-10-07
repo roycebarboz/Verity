@@ -6,9 +6,8 @@ from functools import lru_cache
 from pathlib import Path
 
 import chromadb
-import litellm
 
-from verity.llm import EMBED_MODEL
+from verity.llm import check_index_embed_model, embed
 from verity.reranker import COSINE_DEPTH, RERANK_DEPTH, Reranker, get_reranker
 from verity.schemas import QueryRetrieval, RetrievedChunk
 
@@ -43,12 +42,13 @@ def _get_collection() -> chromadb.Collection:
     if not Path(chroma_dir).exists():
         _download_from_s3(chroma_dir)
     client = chromadb.PersistentClient(path=chroma_dir)
-    return client.get_collection(COLLECTION_NAME)
+    collection = client.get_collection(COLLECTION_NAME)
+    check_index_embed_model(collection.metadata)
+    return collection
 
 
 def _embed(texts: list[str]) -> list[list[float]]:
-    resp = litellm.embedding(model=EMBED_MODEL, input=texts)
-    return [item["embedding"] for item in resp.data]
+    return embed(texts)
 
 
 def fair_merge(by_query: list[QueryRetrieval], top_k: int = TOP_K) -> list[RetrievedChunk]:
