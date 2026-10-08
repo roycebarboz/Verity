@@ -18,14 +18,14 @@ Multi-Agent System* (Wipro, May 2026).
 | **Written Report** (1–2 page required writeup) | [`report.pdf`](report.pdf) |
 | **Sample Prompts** (all 5 agent system prompts) | [`doc/PROMPTS.md`](doc/PROMPTS.md) |
 | **Demo Video** | [YouTube — Project Walkthrough](https://youtu.be/nL_729YpNCs) |
-| **Live Demo** | *AWS stack decommissioned — watch the video or [run locally](#-running-locally)* |
-| **Architecture Diagram** | [Agent pipeline](#agent-architecture) · [AWS topology](#aws-deployment) |
+| **Live Demo** | *Runs locally — watch the video or [run locally](#-running-locally)* |
+| **Architecture Diagram** | [Agent pipeline](#agent-architecture) |
 
 ---
 
 ## Demo
 
-The AWS deployment (ECS Fargate + ALB) has been decommissioned after the presentation per the cost-containment plan.
+The AWS deployment (ECS Fargate + ALB) has been decommissioned. The AWS code (Terraform, DynamoDB audit, S3 index sync) lives on the [`legacy_branch`](../../tree/legacy_branch) branch; `main` is local-only.
 
 - **Watch the demo:** [YouTube — Project Walkthrough](https://youtu.be/nL_729YpNCs)
 - **Run locally:** see [Running Locally](#-running-locally) below
@@ -59,11 +59,27 @@ through a typed Pydantic `TicketState` object passed node to node.
 
 | # | Agent | Responsibility | Model |
 |---|---|---|---|
-| 1 | **Bouncer** | Validate input; classify category & severity; detect prompt injection | `gpt-4.1-nano` |
-| 2 | **Librarian** | Rewrite ticket into 1–3 queries; vector search; return top-5 chunks | `gpt-4.1-nano` + `text-embedding-3-small` |
+| 1 | **Bouncer** | Validate input; classify category, severity & Ticket complexity (simple/complex); detect prompt injection | `gpt-4.1-nano` |
+| 2 | **Librarian** | Rewrite ticket into 1 query (simple) or 2–3 Sub-queries (complex); vector search; optional Rerank; Fair merge into the top-5 chunks | `gpt-4.1-nano` + `text-embedding-3-small` (+ optional local Qwen3-Reranker-0.6B) |
 | 3 | **Drafter** | Write a customer reply **using only retrieved chunks** — no external knowledge, no tools | `gpt-4.1-mini` |
 | 4 | **Verifier** | Check every claim maps to a chunk; PII scan; tone & policy check | `gpt-5-mini` (reasoning tier) |
 | 5 | **Dispatcher** | Route to exactly one outcome: `send_to_customer`, `escalate_to_human`, or `request_more_info` | `gpt-4.1-nano` |
+
+Models shown are the defaults. Every chat and embedding call goes through the
+[LiteLLM](https://github.com/BerriAI/litellm) SDK, so each agent's model is set with
+`BOUNCER_MODEL`, `LIBRARIAN_MODEL`, `DRAFTER_MODEL`, `VERIFIER_MODEL` and
+`DISPATCHER_MODEL`, and the embedding model with `EMBED_MODEL` (see
+[ADR 0002](docs/adr/0002-litellm-for-all-model-calls.md)).
+
+**Retrieval:** each Retrieval query fetches candidates from Chroma. When the reranker is
+on (`RERANKER_MODE=qwen`, the default), each query fetches 20 candidates and reranks them
+against its own query; otherwise it fetches the top 5 by cosine. The per-query results
+are combined by a **Fair merge** — each query's #1, then each query's #2, and so on until
+five Chunks are chosen — so every part of a complex ticket is represented (see
+[ADR 0001](docs/adr/0001-fair-merge-over-score-sort.md)). Each Chunk carries its own score
+and score kind (`cosine` or `rerank`), and the final list is shown in merge order. The
+embedding model is tied to the Chroma index: changing `EMBED_MODEL` requires re-running
+`scripts/ingest_kb.py`, and Verity refuses to query an index built with a different model.
 
 **Flow control:** the Bouncer routes confirmed injection attempts straight to human
 escalation. A failed verification triggers up to **2 retries** of the Drafter; once
@@ -73,27 +89,11 @@ expensive.
 
 ---
 
-## AWS Deployment (Reference Architecture)
+## Legacy AWS Deployment
 
-The system **was** deployed as a **single ECS Fargate container** (FastAPI + LangGraph
-backend serving the React build as static assets) behind a public Application Load
-Balancer. The AWS stack has been decommissioned. The architecture below is the reference
-topology that was live during the presentation.
-
-![Verity AWS system design](AWS_system_design.png)
-
-| Component | Role |
-|---|---|
-| **ALB** (`verity-alb`) | Public ingress, listener `:80 → :8000` |
-| **ECS Fargate** (`verity`) | 0.25 vCPU / 512 MB task running the FastAPI + LangGraph app |
-| **ECR** | Container image registry |
-| **S3** | Stored the prebuilt Chroma vector index, downloaded at container start |
-| **Secrets Manager** | OpenAI + Datadog API keys, injected as env vars at task start |
-| **DynamoDB** (`verity-audit`) | One PII-redacted audit record per ticket |
-| **Datadog LLM Obs** | Five named LLM spans per ticket + faithfulness / citation-coverage evals |
-
-Infrastructure was defined as code in [`infra/main.tf`](infra/main.tf) (Terraform).
-Full step-by-step deployment runbook is in [`PRD.md`](PRD.md) Section 10, Phase 4.
+The original ECS Fargate + ALB deployment (Terraform IaC, DynamoDB audit trail, S3-hosted Chroma
+index, Secrets Manager) is preserved on the [`legacy_branch`](../../tree/legacy_branch) branch,
+including its topology diagram and deployment runbook. `main` runs locally only.
 
 ---
 
@@ -115,17 +115,16 @@ via a typed shared state object, not free-form chat. See [`PRD.md`](PRD.md) §7 
   confirmed attacks bypass the pipeline, are quoted but **never executed**.
 - **Output filtering** — the Verifier rejects any uncited claim, PII leak, or
   off-policy/off-tone content before a response can be sent.
-- **Data handling** — PII is redacted before anything is written to DynamoDB or logs;
-  API keys live in AWS Secrets Manager, never in code, logs, or Terraform state.
-- **Least privilege** — the Fargate task role can read exactly two secrets, write to
-  one DynamoDB table, and read one S3 bucket. No agent has shell, network, or
+- **Data handling** — PII is redacted before anything is written to logs;
+  API keys live in `.env` (git-ignored), never in code or logs.
+- **Least privilege** — no agent has shell, network, or
   arbitrary DB access. Guardrail code: [`backend/verity/guardrails.py`](backend/verity/guardrails.py).
 
 ### 3. Implementation Approach
 - **Stack** — Python 3.11, LangGraph (orchestration), Pydantic v2 (state validation),
   FastAPI (API), Vite + React + TypeScript + Tailwind (UI), Chroma (vector store),
-  OpenAI (LLMs), Datadog (observability), DynamoDB (audit), ECS Fargate + ALB (AWS).
-- **Error handling** — exponential backoff on OpenAI 429/5xx, schema-parse retries,
+  LiteLLM SDK (provider-agnostic; OpenAI by default) with an optional local Qwen3-Reranker, Datadog (observability).
+- **Error handling** — LiteLLM's built-in retries on provider 429/5xx, schema-parse retries (including a wrong query count for the ticket's complexity),
   and a deterministic `escalate_to_human` fallback on any unhandled exception.
 - **Testing** — `pytest` unit tests plus a 30-ticket offline eval suite
   ([`scripts/run_eval.py`](scripts/run_eval.py)) covering retrieval precision,
@@ -133,12 +132,12 @@ via a typed shared state object, not free-form chat. See [`PRD.md`](PRD.md) §7 
 
 ### 4. Use of AI / LLMs and Collaboration
 LLMs are used for classification, query rewriting, grounded drafting, and reasoning-
-based verification — each agent on the cheapest model that fits its job, with the
+based verification — each agent on the cheapest model that fits its job (configurable per agent), with the
 reasoning-tier model reserved for the Verifier. Agents "collaborate" through the
 Drafter↔Verifier critique loop: the Verifier returns structured failure reasons that
 the Drafter consumes on retry. The autonomy/control trade-off is resolved toward
 **control** — verification is mandatory, retries are bounded, and every path
-terminates in a single auditable routing decision. All five agent system prompts
+terminates in a single routing decision. All five agent system prompts
 and their user-message templates are documented in [`doc/PROMPTS.md`](doc/PROMPTS.md).
 
 ---
@@ -152,26 +151,26 @@ and their user-message templates are documented in [`doc/PROMPTS.md`](doc/PROMPT
 | [`report.pdf`](report.pdf) | The 1–2 page written report (required deliverable) |
 | [`doc/PROMPTS.md`](doc/PROMPTS.md) | All five agent system prompts + user-message templates (*Sample Prompts* deliverable) |
 | [`doc/SYNTHETIC_DATA.md`](doc/SYNTHETIC_DATA.md) | How the KB corpus and eval set were generated |
+| [`GLOSSARY.md`](GLOSSARY.md) | Domain vocabulary (Ticket complexity, Fair merge, Rerank, …) |
+| [`docs/adr/`](docs/adr/) | Architecture decision records (Fair merge, LiteLLM for all model calls) |
 | [`agent_system_diagram.png`](agent_system_diagram.png) | Agent pipeline / LangGraph state graph |
-| [`AWS_system_design.png`](AWS_system_design.png) | AWS deployment topology |
 | [`data/evals/`](data/evals/) | 30-ticket evaluation set + its README |
 | [`data/kb/`](data/kb/) | 60 synthetic knowledge-base markdown documents |
-| [`infra/main.tf`](infra/main.tf) | Terraform IaC for the full AWS stack |
 
 ```
 backend/    Python 3.11 — FastAPI + LangGraph (agents, prompts, guardrails, API)
 frontend/   Vite + React + TypeScript + Tailwind single-page UI
 data/kb/    60 KB markdown documents
 data/evals/ 30 annotated eval tickets
-infra/      Terraform IaC
 scripts/    KB ingestion, eval runner, stress test
+models/     Local model weights (Qwen3-Reranker-0.6B; not needed when RERANKER_MODE=none)
 ```
 
 ---
 
 ## 🖥️ Running Locally
 
-Prerequisites: Python 3.11, Node 18+, an OpenAI API key.
+Prerequisites: Python 3.11, Node 18+, an API key for your model provider (OpenAI by default).
 
 ```bash
 # 1. Configure environment
@@ -179,8 +178,9 @@ cp .env.example .env          # then fill in OPENAI_API_KEY (Datadog keys option
 
 # 2. Backend
 cd backend
-pip install -e ".[dev]"
+pip install -e ".[dev,rerank]"          # drop ",rerank" if you set RERANKER_MODE=none
 python ../scripts/ingest_kb.py          # build the Chroma index from data/kb/
+                                        # (re-run whenever EMBED_MODEL changes)
 uvicorn verity.api:app --reload         # serves on http://localhost:8000
 
 # 3. Frontend (separate terminal)
@@ -198,6 +198,12 @@ python -m verity.cli "How do I reset my password?"
 # Offline eval suite (30 tickets)
 python scripts/run_eval.py
 ```
+
+> **Reranker:** `RERANKER_MODE` defaults to `qwen`, which needs the `rerank` install group
+> and the Qwen3-Reranker-0.6B weights in `models/Qwen3-Reranker-0.6B` (or the path in
+> `RERANKER_MODEL_DIR`). The server refuses to start if either is missing. Set
+> `RERANKER_MODE=none` to skip reranking; production does this. The triage response and the
+> eval metrics file record which mode was used.
 
 > The Datadog keys in `.env` are optional for local development — the pipeline runs
 > without them; only the Observability spans are skipped.

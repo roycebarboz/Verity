@@ -136,7 +136,6 @@ async def health() -> dict[str, str]:
 
 @app.post("/triage")
 async def triage(request: TicketRequest) -> StreamingResponse:
-    from verity.audit import write_audit_record
     from verity.graph import pipeline
     from verity.schemas import TicketState
 
@@ -151,7 +150,7 @@ async def triage(request: TicketRequest) -> StreamingResponse:
         from verity.guardrails import detect_pii, find_pii_types
         if detect_pii(request.ticket_text):
             types = find_pii_types(request.ticket_text)
-            print(f"[PII] Input contains PII ({', '.join(types)}) for ticket {initial.ticket_id} — audit will redact")
+            print(f"[PII] Input contains PII ({', '.join(types)}) for ticket {initial.ticket_id}")
 
         last_state: TicketState = initial
         accumulated: dict = initial.model_dump()
@@ -172,13 +171,11 @@ async def triage(request: TicketRequest) -> StreamingResponse:
             last_state.final_response = f"[System error — escalated] {exc}"
 
         # Always emit pipeline_done so the frontend leaves its loading state,
-        # even if audit/response-building fails. The audit module already swallows
-        # its own errors, but _build_response could still raise on malformed state.
+        # even if response-building fails (_build_response could raise on malformed state).
         total_latency_ms = (time.monotonic() - start) * 1000
         from verity.reranker import get_reranker_mode
         try:
             cost_usd = _estimate_cost(last_state.agent_costs)
-            write_audit_record(last_state, total_latency_ms, cost_usd)
             done_payload = _build_response(last_state, total_latency_ms, cost_usd)
         except Exception as exc:
             err_payload = {"message": f"post-stream failure: {exc}", "ticket_id": initial.ticket_id}

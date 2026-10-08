@@ -161,7 +161,6 @@ def test_startup_passes_when_mode_is_none() -> None:
 
 @pytest.mark.parametrize("mode", ["qwen", "none"])
 def test_triage_response_reports_reranker_mode(monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
-    import verity.audit
     import verity.graph
     from verity.api import app
 
@@ -172,7 +171,6 @@ def test_triage_response_reports_reranker_mode(monkeypatch: pytest.MonkeyPatch, 
 
     monkeypatch.setenv("RERANKER_MODE", mode)
     monkeypatch.setattr(verity.graph, "pipeline", Pipeline())
-    monkeypatch.setattr(verity.audit, "write_audit_record", lambda *a, **k: None)
 
     resp = TestClient(app).post(
         "/triage", json={"ticket_text": "help", "customer_id": "c", "channel": "web"}

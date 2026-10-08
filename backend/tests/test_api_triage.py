@@ -40,12 +40,10 @@ def _pipeline_done(body: str) -> dict:
 
 
 def test_pipeline_done_includes_five_chunks_per_query(monkeypatch: pytest.MonkeyPatch) -> None:
-    import verity.audit
     import verity.graph
     from verity.api import app
 
     monkeypatch.setattr(verity.graph, "pipeline", FakePipeline())
-    monkeypatch.setattr(verity.audit, "write_audit_record", lambda *a, **k: None)
 
     resp = TestClient(app).post(
         "/triage", json={"ticket_text": "help", "customer_id": "c", "channel": "web"}
@@ -59,7 +57,6 @@ def test_pipeline_done_includes_five_chunks_per_query(monkeypatch: pytest.Monkey
 
 
 def test_estimated_cost_is_sum_of_per_agent_costs(monkeypatch: pytest.MonkeyPatch) -> None:
-    import verity.audit
     import verity.graph
     from verity.api import app
 
@@ -79,7 +76,6 @@ def test_estimated_cost_is_sum_of_per_agent_costs(monkeypatch: pytest.MonkeyPatc
             }
 
     monkeypatch.setattr(verity.graph, "pipeline", CostPipeline())
-    monkeypatch.setattr(verity.audit, "write_audit_record", lambda *a, **k: None)
 
     resp = TestClient(app).post(
         "/triage", json={"ticket_text": "help", "customer_id": "c", "channel": "web"}

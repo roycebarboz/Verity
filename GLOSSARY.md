@@ -36,3 +36,13 @@ _Avoid_: flatten, fusion, merge by score
 
 **Rerank**:
 Rescoring the **Chunks** found for a **Retrieval query** against that same query, using a model that reads the query and the chunk together.
+_Avoid_: rescore, re-rank
+
+**Score kind**:
+What a **Chunk**'s score means: `cosine` (vector similarity) or `rerank` (a **Rerank** score). Each Chunk keeps its own score and score kind; scores are not comparable across **Retrieval queries**.
+
+**Reranker mode**:
+The single setting (`qwen` or `none`) that turns **Rerank** on or off. On by default locally; production sets it to `none`.
+
+**Embedding model binding**:
+The embedding model is recorded in the Chroma index when it is built; Verity refuses to query an index built with a different model, so changing the model means re-ingesting.

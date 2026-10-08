@@ -149,14 +149,6 @@ def test_regex_injection_fast_path_sets_no_complexity() -> None:
     assert "complexity" not in update
 
 
-def test_audit_record_includes_complexity() -> None:
-    from verity.audit import _build_record
-
-    record = _build_record(_state("complex"), 10.0, 0.0)
-
-    assert record["bouncer"]["complexity"] == "complex"
-
-
 def test_api_bouncer_step_output_includes_complexity() -> None:
     from verity.api import _step_from_state
 

@@ -19,7 +19,7 @@ COPY verity/ verity/
 # Copy frontend static build (run 'npm run build && cp -r frontend/dist/ backend/static/' first)
 COPY static/ static/
 
-# Chroma index is downloaded from S3 at startup if not present
+# Mount or bake the prebuilt Chroma index at this path
 ENV CHROMA_DIR=/app/data/chroma
 ENV PORT=8000
 

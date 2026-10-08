@@ -1,5 +1,7 @@
 # Verity — Product Requirements Document
 
+> **Note:** The AWS deployment described in this document (Terraform, DynamoDB audit, S3 index, Fargate) now lives on the `legacy_branch` branch. `main` is local-only and no longer contains that code.
+
 **Product Name:** Verity
 **Tagline:** The Citation-Grounded Support Triage Copilot
 **Version:** 1.0
@@ -92,12 +94,15 @@ The system shall accept tickets via `POST /triage` with a JSON payload containin
 **Acceptance:** Invalid payloads return HTTP 400 with structured error. Valid payloads return HTTP 200 with a decision object.
 
 ### FR2 — Safety Classification (Bouncer)
-The system shall classify every incoming ticket for `category`, `severity`, and `injection_risk` before further processing. Tickets flagged as injection attempts shall bypass the pipeline and route directly to human escalation, with the original input quoted but never executed.
+The system shall classify every incoming ticket for `category`, `severity`, `complexity` (simple or complex) and `injection_risk` before further processing. A **Complex ticket** is one whose answer needs more than one knowledge-base topic, even if the customer asked only one thing. Tickets flagged as injection attempts shall bypass the pipeline and route directly to human escalation, with the original input quoted but never executed.
 
-**Acceptance:** All tickets in the injection subset of the eval set are correctly flagged and escalated.
+**Acceptance:** All tickets in the injection subset of the eval set are correctly flagged and escalated. The eval reports Bouncer complexity accuracy, where a ticket's expected complexity is *complex* when it has two or more distinct expected source documents.
 
 ### FR3 — Knowledge Retrieval (Librarian)
-The system shall rewrite the user's ticket into 1–3 retrieval queries and return the top 5 most relevant document chunks from the Chroma vector index, each tagged with source document name and chunk index.
+The system shall rewrite the user's ticket into documentation-language retrieval queries — exactly one for a Simple ticket, two or three Sub-queries for a Complex ticket (a wrong count is invalid output and is retried) — and return five document chunks from the Chroma vector index, each tagged with source document name, chunk index, score and score kind.
+
+- Each query fetches candidates independently. With reranking on (`RERANKER_MODE=qwen`, the default for local use) each query fetches 20 candidates and a local Qwen3-Reranker-0.6B rescores them against that same query; with `RERANKER_MODE=none` (used in production) each query fetches 5 candidates ranked by cosine. The server refuses to start if the mode is `qwen` and the model or its runtime is missing.
+- The per-query results are combined by a **Fair merge** (round-robin by rank across queries, skipping duplicates, ties broken by query order) rather than sorted by score, so every part of a Complex ticket is represented. The final list is in merge order. See `docs/adr/0001-fair-merge-over-score-sort.md`.
 
 **Acceptance:** Retrieval precision@5 ≥ 0.7 on the eval set ground truth.
 
@@ -140,6 +145,8 @@ Every agent call shall emit a Datadog LLM Observability span with consistent tag
 | 4 | Verifier | Citation + PII + policy check | `gpt-5-mini` | Reasoning (highest) |
 | 5 | Dispatcher | Route to outcome | `gpt-4.1-nano` | Lowest |
 
+**Configuration:** the models above are defaults. Every chat call goes through the LiteLLM SDK, and each agent's model is set by `<AGENT>_MODEL` (e.g. `VERIFIER_MODEL`), defined in one place. Capability differences (JSON mode, token-limit parameter) and retries are handled by LiteLLM, not by provider-specific code. See `docs/adr/0002-litellm-for-all-model-calls.md`.
+
 **Model selection rationale:** Reasoning capacity is concentrated at the Verifier, where the cost of a missed hallucination is highest. Cheap models handle deterministic classification and routing tasks. The Drafter sits in the middle — fluent enough for customer-facing prose, not paying for reasoning it doesn't need.
 
 ### 7.2 Embedding Model Selection
@@ -153,6 +160,8 @@ Every agent call shall emit a Datadog LLM Observability span with consistent tag
 **Decision:** Use `text-embedding-3-small` for v1. At demo scale (60 documents, ~300–500 chunks), retrieval quality is bottlenecked by corpus design, not embedding dimensionality. The larger model would double index size and storage cost with no measurable quality gain on this corpus.
 
 **Production-scale upgrade path:** For heterogeneous corpora (Confluence, PDFs, mixed-quality sources), benchmark `text-embedding-3-large` against `3-small` on a held-out retrieval eval set. Upgrade only if precision@5 improvement justifies the 6.5× cost increase.
+
+**The embedding model is tied to the index.** Ingestion and query-time retrieval both embed through LiteLLM using one configured model (`EMBED_MODEL`, default `text-embedding-3-small`). Ingestion stores the model name in the Chroma index metadata, and opening the index refuses to run if it differs from the configured model. Changing the embedding model therefore means re-running `scripts/ingest_kb.py`.
 
 ### 7.3 Communication Pattern
 
@@ -169,13 +178,14 @@ Sequential pipeline with one conditional retry loop between Drafter and Verifier
 | Frontend | Vite + React + TypeScript | Single-page demo UI; Claude Code generates rapidly |
 | Frontend styling | Tailwind CSS | Professional default styling without art direction |
 | Vector store | Chroma (embedded) | Zero infrastructure overhead at demo scale; index persisted to S3 |
-| LLM provider | OpenAI API | Per available model list |
+| LLM provider | LiteLLM SDK (in-process; OpenAI models by default) | Provider-agnostic model names from config; LiteLLM supplies retries, capability lookup and per-call cost. No proxy service |
+| Reranker | Qwen3-Reranker-0.6B (local, optional) | Rescores each query's candidates; optional `rerank` install group, off in production |
 | Observability | Datadog LLM Obs + APM | LLM Observability quota available; differentiator for FDE role |
 | Audit storage | DynamoDB | On-demand pricing, free tier covers demo |
 | Compute | AWS ECS Fargate | Smallest container task; no GPU needed |
 | Ingress | Application Load Balancer | HTTPS termination, single public endpoint |
 | Static hosting | FastAPI static route | React build served from same container — avoids cross-origin complexity |
-| Secrets | AWS Secrets Manager | OpenAI key, Datadog API key |
+| Secrets | AWS Secrets Manager | Model-provider key (OpenAI by default), Datadog API key |
 | IaC | Terraform or AWS CDK | One-shot deploy/teardown |
 
 ### 7.5 Vector Store Notes
@@ -197,8 +207,8 @@ The frontend is a single-page React application built with Vite and styled with 
 |---|---|
 | Header | Verity logo + tagline; "View Repo" link |
 | Left panel | Ticket input textarea, customer ID field, channel selector, "Triage" button, 4–5 preset example tickets as quick-load buttons (including one injection attempt and one PII-containing ticket) |
-| Center panel | Pipeline timeline: five collapsed cards (Bouncer, Librarian, Drafter, Verifier, Dispatcher), each expanding to show: model used, latency ms, token count, structured output, attempt number |
-| Right panel | Final outcome card: action taken (send/escalate/request_info), final response text, retrieved citation list, verifier reasoning |
+| Center panel | Pipeline timeline: five collapsed cards (Bouncer, Librarian, Drafter, Verifier, Dispatcher), each expanding to show: model used, latency ms, token count, structured output (the Bouncer card includes Ticket complexity), attempt number |
+| Right panel | Final outcome card: action taken (send/escalate/request_info), final response text, retrieved citation list (in Fair-merge order, with each Chunk's score and score kind), verifier reasoning |
 | Footer | Total latency (ms), total tokens, and Datadog trace ID with copy-to-clipboard |
 
 **Visual requirements:**
@@ -229,10 +239,11 @@ class TicketState(BaseModel):
     # Bouncer outputs
     category: Optional[str] = None
     severity: Optional[Literal["low", "medium", "high"]] = None
+    complexity: Optional[Literal["simple", "complex"]] = None
     injection_detected: Optional[bool] = None
 
     # Librarian outputs
-    retrieved_chunks: list[RetrievedChunk] = []
+    retrieved_chunks: list[RetrievedChunk] = []  # Fair-merge order; each has score and score_kind ("cosine" | "rerank")
 
     # Drafter outputs
     draft_response: Optional[str] = None
@@ -251,6 +262,7 @@ class TicketState(BaseModel):
     # Metadata
     dd_trace_id: Optional[str] = None
     total_tokens: int = 0
+    agent_costs: dict[str, float] = {}  # per-agent cost in USD, as priced by LiteLLM
 ```
 
 **API response schema (returned to React client):**
@@ -267,6 +279,7 @@ interface TriageResponse {
   };
   final_action: "send" | "escalate" | "request_info";
   final_response: string;
+  reranker_mode: "qwen" | "none";
   metrics: {
     total_latency_ms: number;
     total_tokens: number;
@@ -294,7 +307,7 @@ interface TriageResponse {
 
 ### 8.2 Observability Requirements
 - Every workflow produces exactly one Datadog trace with five named LLM spans (`bouncer`, `librarian`, `drafter`, `verifier`, `dispatcher`)
-- Each span tagged with: `agent_name`, `model`, `ticket_id`, `severity`, `attempt_number`, `prompt_template_version`
+- Each span tagged with: `agent_name`, `model`, `ticket_id`, `severity`, `attempt_number`, `prompt_template_version`; the provider tag is derived from the configured model
 - Built-in Datadog evaluations enabled: faithfulness, answer relevancy
 - Custom evaluation: citation coverage score, attached to every Drafter span
 - Two operational dashboards:
@@ -304,14 +317,14 @@ interface TriageResponse {
 ### 8.3 Performance
 - End-to-end P50 latency: ≤ 30 seconds
 - End-to-end P95 latency: ≤ 90 seconds
-- Cost per ticket: ≤ $0.005 at demo scale (5 agent calls, total ~1.5K tokens)
+- Cost per ticket: ≤ $0.005 at demo scale (5 agent calls, total ~1.5K tokens). The reported `estimated_cost_usd` is the sum of each call's actual cost as priced by LiteLLM (input and output tokens priced separately), recorded per agent; there is no hard-coded price table
 - Frontend initial page load: ≤ 2 seconds
 
 Latency targets reflect the cost of correctness-first design: the Verifier runs on `gpt-5-mini` (reasoning tier) and the Drafter↔Verifier loop is bounded at three attempts, so worst-case paths execute the reasoning model three times. Verity is positioned for asynchronous support triage (queued tickets reviewed by an agent before send), not synchronous chat — sub-second response is an explicit non-goal.
 
 ### 8.4 Reliability
-- OpenAI API calls wrapped in exponential backoff (3 attempts, jittered) on 429/5xx
-- Schema-parse failures retry the same agent up to 2 times with parse error appended to prompt
+- Model calls use LiteLLM's built-in retries on provider 429/5xx
+- Schema-parse failures retry the same agent up to 2 times with parse error appended to prompt; this includes a Librarian query count that doesn't match the ticket's complexity
 - Unhandled exceptions short-circuit to deterministic `escalate_to_human` outcome
 - Per-request total token budget: 8,000 tokens hard cap
 - Frontend shows graceful error state on API failure (no white-screen crashes)
@@ -322,12 +335,12 @@ Latency targets reflect the cost of correctness-first design: the Verifier runs 
 
 ### 9.1 Knowledge Base Corpus
 60 markdown documents covering a fictional SaaS company. See `SYNTHETIC_DATA.md` for full generation specification. Document types:
-- FAQs (split by `##` heading, no chunking)
+- FAQs (split by `##` heading; a section over 512 tokens is split with the fixed-size splitter and every piece starts with the section heading)
 - Runbooks (fixed-size chunking, 512 tokens, 75-token overlap)
 - Policy documents (fixed-size chunking)
 - Escalation guides (fixed-size chunking)
 
-Each chunk stored with metadata: `source`, `doc_title`, `chunk_index`.
+Each chunk stored with metadata: `source`, `doc_title`, `chunk_index`. The index itself records the embedding model that built it (see §7.2).
 
 ### 9.2 DynamoDB Audit Record Schema
 
@@ -341,8 +354,8 @@ Each chunk stored with metadata: `source`, `doc_title`, `chunk_index`.
     "channel": "email",
     "customer_id_hash": "..."
   },
-  "bouncer": { "category": "...", "severity": "...", "injection_detected": false },
-  "retriever": { "queries_used": [...], "chunks_retrieved": [...] },
+  "bouncer": { "category": "...", "severity": "...", "complexity": "simple", "injection_detected": false },
+  "retriever": { "queries_used": [...], "chunks_retrieved": [...] },  // chunks in Fair-merge order, each with score and score_kind
   "drafter": { "attempts": 2, "final_draft": "...", "tokens_used": 412 },
   "verifier": {
     "passed": true,
@@ -591,7 +604,7 @@ Deliverables:
 ## 13. Future Versions (Out of Scope for v1)
 
 - Migration to S3 Vector Buckets for production scale
-- Migration to `text-embedding-3-large` for heterogeneous corpora (only if A/B benchmarking justifies the cost)
+- Migration to `text-embedding-3-large` for heterogeneous corpora (only if A/B benchmarking justifies the cost); with the index-bound embedding model this is a config change plus a re-ingest
 - Streaming agent output to frontend via SSE or WebSocket
 - Multi-turn conversation support
 - Multi-language ticket handling (Spanish, French priority)
@@ -606,6 +619,11 @@ Deliverables:
 ## 14. Glossary
 
 - **Agent** — A specialized LLM call with a defined role, system prompt, and structured output schema
+- **Ticket complexity** — The Bouncer's judgement of whether a ticket is Simple (one knowledge-base topic, one Retrieval query) or Complex (more than one topic, two or three Sub-queries)
+- **Retrieval query / Sub-query** — A documentation-language search phrase the Librarian writes from a ticket; Sub-queries are the several queries written for a Complex ticket
+- **Chunk** — A piece of a knowledge-base document stored and retrieved as a single unit, tagged with source document and position
+- **Fair merge** — Combining each query's ranked Chunks round-robin by rank, so every part of a Complex ticket is represented
+- **Rerank** — Rescoring a query's Chunks against that same query with a model that reads the query and chunk together
 - **Citation Coverage** — The proportion of claims in a generated response that map to retrieved source chunks
 - **Faithfulness** — Datadog-computed score measuring whether response content is supported by retrieved context
 - **KB (Knowledge Base)** — The corpus of internal documents from which all customer responses must be grounded
